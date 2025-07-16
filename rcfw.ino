@@ -153,10 +153,22 @@ void set_led(int leds[], int cycle, int effect){
 
 void setup() {
   pinMode(POWER_LED, OUTPUT);
+
+#ifdef ARDUINO_AVR_NANO_EVERY
   Serial.begin(115200);
   // on the Every the internal timer doesn't work - so disable it here,
   // and manually call loop() in the loop
   IBus.begin(Serial1,IBUSBM_NOTIMER);
+#define debug_print Serial.print
+#define debug_println Serial.println
+#elif ARDUINO_AVR_NANO
+  IBus.begin(Serial,IBUSBM_NOTIMER);
+  #warning Building for Nano disables debug output
+#define debug_print(...) ((void)0)
+#define debug_println(...) ((void)0)
+#else
+  #error Build running on unsupported board
+#endif
 
   // the calls here calibrate the neutral position for the ESC
 #if RC_MODEL == NOTANK
@@ -236,10 +248,10 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
     }
   }
 
-  Serial.print(" adjusted left ");
-  Serial.print(pwm_left);
-  Serial.print(" right ");
-  Serial.print(pwm_right);
+  debug_print(" adjusted left ");
+  debug_print(pwm_left);
+  debug_print(" right ");
+  debug_print(pwm_right);
 
   // this is mainly a failsafe for steering modification - for pure throttle
   // above throttle curve adjustment should be enough to prevent the motors
@@ -274,8 +286,8 @@ void loop() {
   setup_controls();
 
   ignition = IBus.readChannel(IGNITION_CHANNEL);
-  Serial.print(" Ignition: ");
-  Serial.print(ignition);
+  debug_print(" Ignition: ");
+  debug_print(ignition);
 
   if (ignition != 2000){
 #if RC_MODEL == NOTANK
@@ -289,20 +301,20 @@ void loop() {
   } else {
     int steer;
     steer = IBus.readChannel(steering_channel);
-    Serial.print("Steer: ");
-    Serial.print(steer);
+    debug_print("Steer: ");
+    debug_print(steer);
     int steer_pwm=0;
     if (steer >= 1000 and steer <= 2000){
       steer_pwm = map(steer, RX_MIN, RX_MAX, STEER_MIN, STEER_MAX);
-      Serial.print(" pwm ");
-      Serial.print(steer_pwm);
+      debug_print(" pwm ");
+      debug_print(steer_pwm);
     }
 
     set_led(power_leds, led_state, led_on);
     int throttle;
     throttle = IBus.readChannel(throttle_channel);
-    Serial.print(" Throttle: ");
-    Serial.print(throttle);
+    debug_print(" Throttle: ");
+    debug_print(throttle);
 
     // TODO: max speed is currently ignored, as that'd only apply to maximum
     //       forward speed. Should be applied to both forward/reverse. But
@@ -321,16 +333,16 @@ void loop() {
     else
       pwm_adjusted = PWM_STOP;
 
-    Serial.print(" ");
-    Serial.print(pwm_adjusted);
+    debug_print(" ");
+    debug_print(pwm_adjusted);
 
     controls(pwm_adjusted, steer_pwm, steer);
   }
 
   int failsafe = IBus.readChannel(failsafe_channel);
-  Serial.print(" failsafe ");
-  Serial.print(failsafe);
-  Serial.println();
+  debug_print(" failsafe ");
+  debug_print(failsafe);
+  debug_println();
 
   delay(LOOP_DELAY);
 }
