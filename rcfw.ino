@@ -29,6 +29,9 @@
 #elif RC_MODEL == RC_BENCHY
 #define MOTOR_PIN 3
 #define SERVO_PIN 10
+#elif RC_MODEL == SNOW_MOBILE
+#define MOTOR_PIN 3
+#define SERVO_PIN 10
 #endif
 
 // arduino can tolerate about 20µA per pin, with a total of 200µA
@@ -39,6 +42,15 @@
 // the power LEDs also serve as back lights
 #define POWER_LED 13
 #define POWER_LEDS {2,13}
+#if RC_MODEL == NOTANK
+// TODO, this works right now because we're not using LEDs at all - but once we start
+// using them the LED setter needs to be fixed to deal with variable length arrays
+#define FRONT_LEDS {}
+#define EFFECT_LEDS {}
+#else
+#define FRONT_LEDS {11,12}
+#define EFFECT_LEDS {4,5}
+#endif
 
 // this should be a three state switch, and needs to be setup as aux channel
 // comment this definition if you don't want that feature
@@ -48,6 +60,8 @@
 // this also reduces the risk of frying your Arduino here, and generally
 // makes things safer, so this is no longer optional
 #define IGNITION_CHANNEL 6
+
+#define EFFECT_CHANNEL 5
 
 /*
   This configures an input (default: VRA on channel 5) to adjust the speed
@@ -93,6 +107,9 @@ Servo motor_right;
 #elif RC_MODEL == RC_BENCHY
 Servo motor;
 Servo steering;
+#elif RC_MODEL == SNOW_MOBILE
+Servo motor;
+Servo steering;
 #endif
 int ignition=1000;
 int led_state=0;
@@ -101,6 +118,8 @@ int steering_channel;
 int failsafe_channel;
 
 int power_leds[]=POWER_LEDS;
+int front_leds[]=FRONT_LEDS;
+int effect_leds[]=EFFECT_LEDS;
 
 enum led_effects{
   led_on,
@@ -115,6 +134,7 @@ void setup_controls(){
   int controls = 1000;
 #endif
 
+#if RC_MODEL == NOTANK
   // throttle is only supported right due to support for reversing
   if (controls == 1500){
     // throttle right, steering left
@@ -127,6 +147,21 @@ void setup_controls(){
     steering_channel=0;
     failsafe_channel=3;
   }
+#else
+  if (controls == 1500){
+    // throttle right, steering left
+    throttle_channel=1;
+    steering_channel=3;
+  } else if (controls == 2000) {
+    // throttle and steering right
+    throttle_channel=1;
+    steering_channel=0;
+  } else {
+    // default, throttle on the left, steering right
+    throttle_channel=2;
+    steering_channel=0;
+  }
+#endif
 }
 
 void set_led(int leds[], int cycle, int effect){
@@ -181,6 +216,15 @@ void setup() {
   motor.attach(MOTOR_PIN, 1000, 2000);
   motor.write(PWM_STOP);
 
+  steering.attach(SERVO_PIN);
+  steering.write(STEER_MAX);
+  delay(1);
+  steering.write(STEER_MIN);
+  delay(1);
+  steering.write(STEER_MID);
+#elif RC_MODEL == SNOW_MOBILE
+  motor.attach(MOTOR_PIN, 1000, 2000);
+  motor.write(PWM_STOP);
   steering.attach(SERVO_PIN);
   steering.write(STEER_MAX);
   delay(1);
@@ -273,6 +317,16 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
 
   // we shouldn't need a low speed cutoff as for the tank - if I'm wrong that should
   // go here.
+  motor.write(pwm_adjusted);
+}
+#elif RC_MODEL == SNOW_MOBILE
+// this should work like that, but needs testing
+void controls(int pwm_adjusted, int steer_pwm, int steer){
+  if (steer >= 1000 and steer <= 2000)
+    steering.write(steer_pwm);
+  else
+    steering.write(STEER_MID);
+
   motor.write(pwm_adjusted);
 }
 #endif
