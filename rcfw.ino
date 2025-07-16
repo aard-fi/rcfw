@@ -1,6 +1,12 @@
 #include <IBusBM.h>
 #include <Servo.h>
 
+#define SNOW_MOBILE 1
+#define RC_BENCHY 2
+#define NOTANK 3
+
+#define RC_MODEL NOTANK
+
 /*
  The further you go down the defines the less likely you should
  want to change something.
@@ -17,8 +23,13 @@
 #define PWM_CUTOFF 10
 
 // the digital pin the motor is attached to
+#if RC_MODEL == NOTANK
 #define MOTOR_PIN_LEFT 3
 #define MOTOR_PIN_RIGHT 4
+#elif RC_MODEL == RC_BENCHY
+#define MOTOR_PIN 3
+#define SERVO_PIN 10
+#endif
 
 // arduino can tolerate about 20µA per pin, with a total of 200µA
 // a bright 5mm LED draws roughly 20µA - so three sets of two LEDs
@@ -66,6 +77,7 @@
 #define PWM_STOP 90
 
 #define STEER_MIN 0
+#define STEER_MID 90
 #define STEER_MAX 180
 
 // with trim the values sent by the transmitter might be over/under this range,
@@ -75,8 +87,13 @@
 #define RX_MAX 2000
 
 IBusBM IBus;
+#if RC_MODEL == NOTANK
 Servo motor_left;
 Servo motor_right;
+#elif RC_MODEL == RC_BENCHY
+Servo motor;
+Servo steering;
+#endif
 int ignition=1000;
 int led_state=0;
 int throttle_channel;
@@ -142,13 +159,111 @@ void setup() {
   IBus.begin(Serial1,IBUSBM_NOTIMER);
 
   // the calls here calibrate the neutral position for the ESC
+#if RC_MODEL == NOTANK
   motor_left.attach(MOTOR_PIN_LEFT, 1000, 2000);
   motor_left.write(PWM_STOP);
   motor_right.attach(MOTOR_PIN_RIGHT, 1000, 2000);
   motor_right.write(PWM_STOP);
 
+#elif RC_MODEL == RC_BENCHY
+  motor.attach(MOTOR_PIN, 1000, 2000);
+  motor.write(PWM_STOP);
+
+  steering.attach(SERVO_PIN);
+  steering.write(STEER_MAX);
+  delay(1);
+  steering.write(STEER_MIN);
+  delay(1);
+  steering.write(STEER_MID);
+#endif
   setup_controls();
 }
+
+#if RC_MODEL == NOTANK
+void controls(int pwm_adjusted, int steer_pwm, int steer){
+  int pwm_left, pwm_right;
+
+  pwm_left = pwm_adjusted;
+  pwm_right = pwm_adjusted;
+
+  // TODO:
+  //       - optimise steering - we can use reverse here to avoid slowing down
+  //         one side.
+  if (pwm_adjusted == PWM_STOP) {
+    // special handling for turning at zero speed
+    if (steer_pwm < 90) { //left
+      steer_pwm = map(steer_pwm, 0, 90, 90, 0);
+      pwm_left = PWM_STOP - steer_pwm/2;
+      pwm_right = PWM_STOP + steer_pwm/2;
+    } else {
+      steer_pwm = steer_pwm - 90;
+      pwm_left = PWM_STOP + steer_pwm/2;
+      pwm_right = PWM_STOP - steer_pwm/2;
+    }
+  } else if (pwm_adjusted < PWM_STOP) {
+    // reversing
+    if (steer_pwm < 90) {
+      // steer left
+      steer_pwm = map(steer_pwm, 0, 90, 90, 0);
+      if (pwm_adjusted - steer_pwm < 0)
+        pwm_left = pwm_adjusted + steer_pwm;
+      else
+        pwm_right = pwm_adjusted - steer_pwm;
+    } else if (steer_pwm > 90) {
+      // right
+      steer_pwm = steer_pwm - 90;
+      if (pwm_adjusted - steer_pwm < 0)
+        pwm_right = pwm_adjusted + steer_pwm;
+      else
+        pwm_left = pwm_adjusted - steer_pwm;
+    }
+  } else {
+    // generally going forward
+    if (steer_pwm < 90) {
+      // steer left
+      steer_pwm = map(steer_pwm, 0, 90, 90, 0);
+      if (pwm_adjusted + steer_pwm > 180)
+        pwm_left = pwm_adjusted - steer_pwm;
+      else
+        pwm_right = pwm_adjusted + steer_pwm;
+    } else if (steer_pwm > 90) {
+      // right
+      steer_pwm = steer_pwm - 90;
+      if (pwm_adjusted + steer_pwm > 180)
+        pwm_right = pwm_adjusted - steer_pwm;
+      else
+        pwm_left = pwm_adjusted + steer_pwm;
+    }
+  }
+
+  Serial.print(" adjusted left ");
+  Serial.print(pwm_left);
+  Serial.print(" right ");
+  Serial.print(pwm_right);
+
+  // this is mainly a failsafe for steering modification - for pure throttle
+  // above throttle curve adjustment should be enough to prevent the motors
+  // running too slow.
+  if (pwm_left >= PWM_STOP - PWM_CUTOFF && pwm_left <= PWM_STOP + PWM_CUTOFF)
+    pwm_left = PWM_STOP;
+  if (pwm_right >= PWM_STOP - PWM_CUTOFF && pwm_right <= PWM_STOP + PWM_CUTOFF)
+    pwm_right = PWM_STOP;
+
+  motor_left.write(pwm_left);
+  motor_right.write(pwm_right);
+}
+#elif RC_MODEL == RC_BENCHY
+void controls(int pwm_adjusted, int steer_pwm, int steer){
+  if (steer >= 1000 and steer <= 2000)
+    steering.write(steer_pwm);
+  else
+    steering.write(STEER_MID);
+
+  // we shouldn't need a low speed cutoff as for the tank - if I'm wrong that should
+  // go here.
+  motor.write(pwm_adjusted);
+}
+#endif
 
 void loop() {
   IBus.loop();
@@ -163,8 +278,12 @@ void loop() {
   Serial.print(ignition);
 
   if (ignition != 2000){
+#if RC_MODEL == NOTANK
     motor_left.write(PWM_STOP);
     motor_right.write(PWM_STOP);
+#elif RC_MODEL == RC_BENCHY
+    motor.write(PWM_STOP);
+#endif
 
     set_led(power_leds, led_state, led_cycle);
   } else {
@@ -202,79 +321,10 @@ void loop() {
     else
       pwm_adjusted = PWM_STOP;
 
-    int pwm_left, pwm_right;
-
-    pwm_left = pwm_adjusted;
-    pwm_right = pwm_adjusted;
-
     Serial.print(" ");
     Serial.print(pwm_adjusted);
 
-    // TODO:
-    //       - optimise steering - we can use reverse here to avoid slowing down
-    //         one side.
-    if (pwm_adjusted == PWM_STOP) {
-      // special handling for turning at zero speed
-      if (steer_pwm < 90) { //left
-        steer_pwm = map(steer_pwm, 0, 90, 90, 0);
-        pwm_left = PWM_STOP - steer_pwm/2;
-        pwm_right = PWM_STOP + steer_pwm/2;
-      } else {
-        steer_pwm = steer_pwm - 90;
-        pwm_left = PWM_STOP + steer_pwm/2;
-        pwm_right = PWM_STOP - steer_pwm/2;
-      }
-    } else if (pwm_adjusted < PWM_STOP) {
-      // reversing
-      if (steer_pwm < 90) {
-        // steer left
-        steer_pwm = map(steer_pwm, 0, 90, 90, 0);
-        if (pwm_adjusted - steer_pwm < 0)
-          pwm_left = pwm_adjusted + steer_pwm;
-        else
-          pwm_right = pwm_adjusted - steer_pwm;
-      } else if (steer_pwm > 90) {
-        // right
-        steer_pwm = steer_pwm - 90;
-        if (pwm_adjusted - steer_pwm < 0)
-          pwm_right = pwm_adjusted + steer_pwm;
-        else
-          pwm_left = pwm_adjusted - steer_pwm;
-      }
-    } else {
-      // generally going forward
-      if (steer_pwm < 90) {
-        // steer left
-        steer_pwm = map(steer_pwm, 0, 90, 90, 0);
-        if (pwm_adjusted + steer_pwm > 180)
-          pwm_left = pwm_adjusted - steer_pwm;
-        else
-          pwm_right = pwm_adjusted + steer_pwm;
-      } else if (steer_pwm > 90) {
-        // right
-        steer_pwm = steer_pwm - 90;
-        if (pwm_adjusted + steer_pwm > 180)
-          pwm_right = pwm_adjusted - steer_pwm;
-        else
-          pwm_left = pwm_adjusted + steer_pwm;
-      }
-    }
-
-    Serial.print(" adjusted left ");
-    Serial.print(pwm_left);
-    Serial.print(" right ");
-    Serial.print(pwm_right);
-
-    // this is mainly a failsafe for steering modification - for pure throttle
-    // above throttle curve adjustment should be enough to prevent the motors
-    // running too slow.
-    if (pwm_left >= PWM_STOP - PWM_CUTOFF && pwm_left <= PWM_STOP + PWM_CUTOFF)
-      pwm_left = PWM_STOP;
-    if (pwm_right >= PWM_STOP - PWM_CUTOFF && pwm_right <= PWM_STOP + PWM_CUTOFF)
-      pwm_right = PWM_STOP;
-
-    motor_left.write(pwm_left);
-    motor_right.write(pwm_right);
+    controls(pwm_adjusted, steer_pwm, steer);
   }
 
   int failsafe = IBus.readChannel(failsafe_channel);
