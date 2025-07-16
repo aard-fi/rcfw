@@ -159,6 +159,9 @@ void loop() {
   setup_controls();
 
   ignition = IBus.readChannel(IGNITION_CHANNEL);
+  Serial.print(" Ignition: ");
+  Serial.print(ignition);
+
   if (ignition != 2000){
     motor_left.write(PWM_STOP);
     motor_right.write(PWM_STOP);
