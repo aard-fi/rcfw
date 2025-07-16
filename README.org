@@ -3,6 +3,8 @@
     - [[#working-features][Working features]]
     - [[#planned-features][Planned features]]
     - [[#required-hardware][Required hardware]]
+      - [[#flysky-hardware][Flysky hardware]]
+      - [[#elrs-hardware][ELRS hardware]]
   - [[#modified-parts][Modified parts]]
     - [[#track-segments][Track segments]]
     - [[#track-inserts][Track inserts]]
@@ -11,7 +13,15 @@
 
 ** Introduction
 
-This is a variant of my [[https://github.com/bwachter/arctic_tinyrider][Arctic Tinyrider controller firmware]] for the [[https://www.thingiverse.com/thing:2789361][NoTankS tank]]. For this variant I've moved to the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] - mainly for the additional UARTs. This is mainly useful for debugging - the RX pin is no longer shared between the iBus receiver and USB serial. Compiling it for a traditional should require only small changes.
+This is a variant of my [[https://github.com/bwachter/arctic_tinyrider][Arctic Tinyrider controller firmware]], trying to support multiple models (including the original one) with compile time switches:
+
+- the Arctic Tinyrider
+- the [[https://www.thingiverse.com/thing:2789361][NoTankS tank]]
+- the [[https://www.printables.com/model/34128-rc-benchy][RC Benchy]]
+
+It should also work without changes for any model either just using two motors, ore one motor and one servo for steering - the upcoming model specific details are mostly about LED effects.
+
+For this variant I've moved to the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] - mainly for the additional UARTs. This is mainly useful for debugging - the RX pin is no longer shared between the iBus receiver and USB serial. This will also compile on a Nano, but in that case will disable debug logging.
 
 *** Working features
 
@@ -28,11 +38,27 @@ This is a variant of my [[https://github.com/bwachter/arctic_tinyrider][Arctic T
 *** Required hardware
 
 - one Arduino Nano Every
-- one Flysky receiver - I recommend the FS-A8S
-- one Flysky radio, or any other radio capable of speaking AFHDS 2a
+- one receiver
+- one radio
 - two ESCs with reverse which use the first PWM input value to configure the zero position. It also should be configurable for forward/reverse - most come in forward/reverse/brake configuration, and not all allow omitting the brake. I'm using the 160A variant from [[https://www.aliexpress.com/item/1005006256842555.html][here]].
 
+**** Flysky hardware
+
+Recommendation here is the FS-A8S as receiver, and an AFHDS 2a transmitter, like the FS-i6. When starting new I'd recommend going for ELRS hardware instead, though.
+
 The main drawback of the FS-A8S is the lack of a second iBus - so we can't send custom telemetry data back to the radio. On the plus side it is a tiny receiver, very cheap (roughly 10 EUR), and can output up to 18 channels via iBus. I'm not aware of receivers of a similar size with more than one iBus - other small Flysky receivers just have more connectors for PWM breakout cables, which we don't need as we're controlling that part via the Arduino.
+
+**** ELRS hardware
+
+Any ELRS transmitter should do, if you're looking for recommendations:
+
+- for a pistol grip style one, Radiomaster MT12
+- for a traditional drone/plane one, Radiomaster Boxer M2, or if you want to be fancier, the TX16S
+- for a small, more portable one, Radiomaster Pocket
+
+For receivers any of the compact (nano) receivers should be fine, from any manufacturer - as far as I'm aware all of them have RX/TX ports for CRSF. Some of the larger ones do not have that - but the tiny ones are easier to stuff into models anyway.
+
+Main drawbock of ELRS is that the receivers are roughly double the price of AFHDS ones - but for that we always have the ability to send telemetry back.
 
 ** Modified parts
 
