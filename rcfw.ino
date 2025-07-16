@@ -1,11 +1,20 @@
-#include <IBusBM.h>
 #include <Servo.h>
 
 #define SNOW_MOBILE 1
 #define RC_BENCHY 2
 #define NOTANK 3
 
+#define TX_IBUS 1
+#define TX_CRSF 2
+
 #define RC_MODEL NOTANK
+#define SERIAL_PROTOCOL TX_CRSF
+
+#if SERIAL_PROTOCOL == TX_IBUS
+#include <IBusBM.h>
+#elif SERIAL_PROTOCOL == TX_CRSF
+#include <AlfredoCRSF.h>
+#endif
 
 /*
  The further you go down the defines the less likely you should
@@ -100,7 +109,12 @@
 #define RX_MID 1500
 #define RX_MAX 2000
 
+#if SERIAL_PROTOCOL == TX_IBUS
 IBusBM IBus;
+#elif SERIAL_PROTOCOL == TX_CRSF
+AlfredoCRSF crsf;
+#endif
+
 #if RC_MODEL == NOTANK
 Servo motor_left;
 Servo motor_right;
@@ -129,11 +143,16 @@ enum led_effects{
 
 void setup_controls(){
 #ifdef CONTROL_CHANNEL
+#if SERIAL_PROTOCOL == TX_IBUS
   int controls = IBus.readChannel(CONTROL_CHANNEL);
+#elif SERIAL_PROTOCOL == TX_CRSF
+  int controls = crsf.getChannel(CONTROL_CHANNEL);
+#endif
 #else
   int controls = 1000;
 #endif
 
+#if SERIAL_PROTOCOL == TX_IBUS
 #if RC_MODEL == NOTANK
   // throttle is only supported right due to support for reversing
   if (controls == 1500){
@@ -148,6 +167,8 @@ void setup_controls(){
     failsafe_channel=3;
   }
 #else
+  // TODO, this needs a bit of work - right now the test here is with a pistol grip one,
+  // where the channels are definitely correct
   if (controls == 1500){
     // throttle right, steering left
     throttle_channel=1;
@@ -161,6 +182,11 @@ void setup_controls(){
     throttle_channel=2;
     steering_channel=0;
   }
+#endif
+#else
+  // channels start at 1
+  steering_channel=1;
+  throttle_channel=2;
 #endif
 }
 
@@ -190,14 +216,25 @@ void setup() {
   pinMode(POWER_LED, OUTPUT);
 
 #ifdef ARDUINO_AVR_NANO_EVERY
+#define debug_print Serial.print
+#define debug_println Serial.println
   Serial.begin(115200);
   // on the Every the internal timer doesn't work - so disable it here,
   // and manually call loop() in the loop
+#if SERIAL_PROTOCOL == TX_IBUS
   IBus.begin(Serial1,IBUSBM_NOTIMER);
-#define debug_print Serial.print
-#define debug_println Serial.println
+#elif SERIAL_PROTOCOL == TX_CRSF
+  Serial1.begin(420000);
+  crsf.begin(Serial1);
+  debug_println("Setting up CRSF on port 1");
+#endif
 #elif ARDUINO_AVR_NANO
+#if SERIAL_PROTOCOL == TX_IBUS
   IBus.begin(Serial,IBUSBM_NOTIMER);
+#elif SERIAL_PROTOCOL == TX_CRSF
+  Serial.begin(115200);
+  crsf.begin(Serial);
+#endif
   #warning Building for Nano disables debug output
 #define debug_print(...) ((void)0)
 #define debug_println(...) ((void)0)
@@ -310,6 +347,10 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
 }
 #elif RC_MODEL == RC_BENCHY
 void controls(int pwm_adjusted, int steer_pwm, int steer){
+  // this should reverse steering when going forward; for reversing steering already should be OK
+  if (pwm_adjusted >= PWM_STOP)
+    steer_pwm = map(steer_pwm, 0, 180, 180, 0);
+
   if (steer >= 1000 and steer <= 2000)
     steering.write(steer_pwm);
   else
@@ -331,17 +372,41 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
 }
 #endif
 
+#if SERIAL_PROTOCOL == TX_CRSF
+void printChannels()
+{
+  for (int ChannelNum = 1; ChannelNum <= 16; ChannelNum++)
+  {
+    debug_print(ChannelNum);
+    debug_print(":");
+    debug_print(crsf.getChannel(ChannelNum));
+    debug_print(" ");
+  }
+}
+#endif
+
 void loop() {
+#if SERIAL_PROTOCOL == TX_IBUS
   IBus.loop();
+#elif SERIAL_PROTOCOL == TX_CRSF
+  crsf.update();
+#endif
   if (led_state >= LED_DELAY)
     led_state = LED_DELAY*-1;
   led_state++;
 
   setup_controls();
 
+#if SERIAL_PROTOCOL == TX_IBUS
   ignition = IBus.readChannel(IGNITION_CHANNEL);
   debug_print(" Ignition: ");
   debug_print(ignition);
+#elif SERIAL_PROTOCOL == TX_CRSF
+  //ignition = crsf.getChannel(IGNITION_CHANNEL);
+  // TODO, figure out how to do ignition here as well
+  ignition = 2000;
+#endif
+
 
   if (ignition != 2000){
 #if RC_MODEL == NOTANK
@@ -354,10 +419,23 @@ void loop() {
     set_led(power_leds, led_state, led_cycle);
   } else {
     int steer;
+#if SERIAL_PROTOCOL == TX_IBUS
     steer = IBus.readChannel(steering_channel);
+#elif SERIAL_PROTOCOL == TX_CRSF
+    steer = crsf.getChannel(steering_channel);
+#endif
     debug_print("Steer: ");
     debug_print(steer);
     int steer_pwm=0;
+
+    // debug log shows values just being a bit over/under; if there are overflow issues
+    // we might end up with large jumps - in which case we'd need to limit this check to just
+    // max/min +- 20 or so
+    if (steer<= 1000)
+      steer = 1000;
+    if (steer >= 2000)
+      steer = 2000;
+
     if (steer >= 1000 and steer <= 2000){
       steer_pwm = map(steer, RX_MIN, RX_MAX, STEER_MIN, STEER_MAX);
       debug_print(" pwm ");
@@ -366,7 +444,12 @@ void loop() {
 
     set_led(power_leds, led_state, led_on);
     int throttle;
+#if SERIAL_PROTOCOL == TX_IBUS
     throttle = IBus.readChannel(throttle_channel);
+#elif SERIAL_PROTOCOL == TX_CRSF
+    throttle = crsf.getChannel(throttle_channel);
+
+#endif
     debug_print(" Throttle: ");
     debug_print(throttle);
 
@@ -374,7 +457,11 @@ void loop() {
     //       forward speed. Should be applied to both forward/reverse. But
     //       also might be dropped completely - motor seems to be correctly
     //       sized here, so might not be needed at all.
+#if SERIAL_PROTOCOL == TX_IBUS
     int pwm_max_raw = IBus.readChannel(SPEED_CHANNEL);
+#elif SERIAL_PROTOCOL == TX_CRSF
+    int pwm_max_raw = crsf.getChannel(SPEED_CHANNEL);
+#endif
     int pwm_max = map(pwm_max_raw, RX_MIN, RX_MAX, SPEED_MIN, SPEED_MAX);
 
     int pwm_adjusted = 0;
@@ -393,9 +480,19 @@ void loop() {
     controls(pwm_adjusted, steer_pwm, steer);
   }
 
+#if SERIAL_PROTOCOL == TX_IBUS
   int failsafe = IBus.readChannel(failsafe_channel);
-  debug_print(" failsafe ");
-  debug_print(failsafe);
+#elif SERIAL_PROTOCOL == TX_CRSF
+  int failsafe = crsf.getChannel(failsafe_channel);
+#endif
+//  debug_print(" failsafe ");
+//  debug_print(failsafe);
+
+#if SERIAL_PROTOCOL == TX_CRSF
+  debug_print(" | ");
+  printChannels();
+#endif
+
   debug_println();
 
   delay(LOOP_DELAY);
