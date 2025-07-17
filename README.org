@@ -1,21 +1,31 @@
 * NoTankS Arduino firmware                                            :TOC_4:
   - [[#introduction][Introduction]]
     - [[#working-features][Working features]]
+      - [[#general][General]]
+      - [[#notanks][NoTankS]]
     - [[#planned-features][Planned features]]
+      - [[#general-1][General]]
+      - [[#notanks-1][NoTankS]]
     - [[#required-hardware][Required hardware]]
       - [[#flysky-hardware][Flysky hardware]]
       - [[#elrs-hardware][ELRS hardware]]
   - [[#modified-parts][Modified parts]]
-    - [[#track-segments][Track segments]]
-    - [[#track-inserts][Track inserts]]
   - [[#transmitter-setup][Transmitter setup]]
+    - [[#pistol-grip-elrs-transmitter][Pistol grip ELRS transmitter]]
+    - [[#elrs-transmitter][ELRS transmitter]]
+    - [[#flysky-transmitter][Flysky transmitter]]
+    - [[#6-channel-receivers][6 channel receivers]]
   - [[#wiring][Wiring]]
+    - [[#arctic-tinyrider][Arctic Tinyrider]]
+    - [[#notanks-2][NoTanks]]
+    - [[#rc-benchy][RC Benchy]]
+    - [[#led-setup][LED setup]]
 
 ** Introduction
 
 This is a variant of my [[https://github.com/bwachter/arctic_tinyrider][Arctic Tinyrider controller firmware]], trying to support multiple models (including the original one) with compile time switches:
 
-- the Arctic Tinyrider
+- the [[https://www.printables.com/model/114300-arctic-tinyrider-rc-snowmobile][Arctic Tinyrider RC snowmobile]]
 - the [[https://www.thingiverse.com/thing:2789361][NoTankS tank]]
 - the [[https://www.printables.com/model/34128-rc-benchy][RC Benchy]]
 
@@ -24,15 +34,27 @@ It should also work without changes for any model either just using two motors, 
 For this variant I've moved to the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] - mainly for the additional UARTs. This is mainly useful for debugging - the RX pin is no longer shared between the iBus receiver and USB serial. This will also compile on a Nano, but in that case will disable debug logging.
 
 *** Working features
+The initial version was written for IBUS receivers - some of the advanced features may not work with CRSF receivers yet.
 
+**** General
 - ignition switch: throttle is pinned to zero unless ignition switch is on. This allows somewhat safer handling when not fully switched off. A LED connected to D13 will signal throttle state by blinking (off) or solid light (on).
-- throttle (obviously)
+- throttle and steering (obviously)
+- reversing, when supported by the model
+- control remapping: a three state switch can be used to change controls. Exact functionality depends on model and transmitter used.
+- dynamic speed control: a dial can be used to limit the speed without having to change the throttle curve in the transmitter. In the default setting the transmitter starts with 50% output, and can be set up to 100%. Exact functionality depends on model and transmitter used.
+
+Ignition switching, control remapping and dynamic speed control currently can be disabled at compile time to free up channels.
+
+**** NoTankS
 - turning based on accelerating or decelerating one side, depending on the current speed. This also allows turning at zero speed
-- reversing
 - curves for low speed cutoff to keep the motors cooler
 
 *** Planned features
+**** General
+- support some more LEDs
+- support failsafe modes in transmitters which have that
 
+**** NoTankS
 - optimising the steering to result in as little speed change as possible
 
 *** Required hardware
@@ -61,17 +83,26 @@ For receivers any of the compact (nano) receivers should be fine, from any manuf
 Main drawbock of ELRS is that the receivers are roughly double the price of AFHDS ones - but for that we always have the ability to send telemetry back.
 
 ** Modified parts
+For some of the models I've modified parts. You can find those in separate repositories:
 
-*** Track segments
-
-=track.scad= adds additional connections to stiffen up the track segments. I had my first track printed in TPU, where this was absolutely required. On hard materials it isn't as important - but from my attempts with the TPU belt I can see that those modifications reduce the stress on the track segments, so might improve track life. Drawback (or benefit?) is that you now have 4 small inserts instead of one large one.
-
-*** Track inserts
-
-=track_insert.scad= adds matching track inserts. Print a few and adjust tolerances - to fill all track segments completely you'll need 328 inserts. You don't want to be stuck with a mountain of hard to insert ones.
+- [[https://github.com/bwachter/arctic_tinyrider][Arctic Tinyrider]]
+- [[https://github.com/bwachter/notanks/][NoTankS]]
 
 ** Transmitter setup
 
+Both throttle curve and trim settings will change the values sent by the transmitter. Currently the assumption is that for our models we can adjust those settings on the Arduino, so adjusted input may be improperly handled - don't use that.
+
+*** Pistol grip ELRS transmitter
+With the default setup of steering at channel 1 and throttle at channel two basic control will work out of the box.
+
+Remapping of throttle and steering is not supported as it does not make much sense with that style of transmitter.
+
+Switches currently also are not yet supported, the model will start with ignition on.
+
+*** ELRS transmitter
+This setup is currently untested, but should be working.
+
+*** Flysky transmitter
 To use all features your transmitter should have the channels configured like this:
 
 1. right stick, left/right
@@ -89,14 +120,62 @@ VRA/VRB are configured on channels 5/6 per default in 'aux channel setup', while
 
 Note that both throttle curve and trim settings will mess with the values sent by the transmitter - and probably should all be disabled.
 
+*** 6 channel receivers
+
+VRB is currently not used, so to make this work you need to select three features to drop to free up channels, and disable them at compile time. With ELRS receivers supporting at least 16 channels, and all the cheap AFHDS nano receivers supporting 10 support for running building with less than 10 channels may be dropped eventually.
+
 ** Wiring
 
-You'll need one power and one ground bar to connect everything to. A quick and dirty variant is getting ready made jumper wires, cut them and then twist end solder the ends together. I recommend using the power from one ESC for the Arduino and receiver, and keeping the other one available for adding a raspberry pi.
+You'll need one power and one ground bar to connect everything to. A quick and dirty variant is getting ready made jumper wires, cut them and then twist end solder the ends together. On the Arduino connect ground and VIN to ground/power bars via a diode to make sure components can't draw power through the Arduino if it is the only thing powered, like during flashing.
 
-The three-pin connector from the left ESC connects to power bar, ground bar, and pin D3 on the Arduino.
+The Pins are set up to minimise gaps, soldering three three-pin-headers will cover all pins on one side of the Arduino, while connecting the unused RST pin. On the other side just VIN and D13 need to be populated.
 
-The three-pin connector from the right ESC connects to a dangling power bar, ground bar, and pin D4 on the Arduino.
+On setups with two or more ESCs make sure to only connect the power pin of one of them.
 
-Depending on your receiver you may have dedicated VCC/ground connectors, if not just connect power and ground from any channel to power/ground bars. Connect the iBus pin to the RX pin on the Arduino. Note that when flashing via USB this pin must be disconnected while flashing.
+Nano receivers should have dedicated ground and power connectors either in the header or cable - in that case just connect all of them. For other receivers connect the bus, and take ground and power from any other channel.
 
-On the Arduino connect ground and VIN to ground/power bars via a diode. Without a diode the ESC might try to pull power for the motor via the Arduino if not everything is powered up, and the Arduino really doesn't like that.
+The following sections contain tables with the pinouts, with the table colums ordered according to the pinout of the component cables.
+
+IBUS receivers have three pin connectors, and only connect to RX. CRSF receivers have four pin connectors, and also connect to TX. The pinouts are for the Arduino Nano Every - on the Nano use RX/TX instead. Note that flashing on the Nano uses RX/TX, so for that board RX should be disconnected on during flashing.
+
+*** Arctic Tinyrider
+
+|          | GND | 5v | arduino | arduino |
+|----------+-----+----+---------+---------|
+| ESC      | x   | x  | D3      |         |
+| receiver | x   | x  | RX1     | TX1     |
+| arduino  | x   | x  |         |         |
+| servo    | x   | x  | D10     |         |
+
+
+*** NoTanks
+
+|           | GND | 5v | arduino | arduino |
+|-----------+-----+----+---------+---------|
+| left ESC  | x   | x  | D3      |         |
+| right ESC | x   | x  | D4      |         |
+| receiver  | x   | x  | RX1     | TX1     |
+| arduino   | x   | x  |         |         |
+
+*** RC Benchy
+
+|          | GND | 5v | arduino | arduino |
+|----------+-----+----+---------+---------|
+| ESC      | x   | x  | D3      |         |
+| receiver | x   | x  | RX1     | TX1     |
+| arduino  | x   | x  |         |         |
+| servo    | x   | x  | D10     |         |
+
+*** LED setup
+
+LEDs are currently not properly supported, apart from the power/status LED - this section describes the hardware configuration that will be supported eventually.
+
+For ad-hoc cabling it is sensible to provide a ground pin to connect to a separate ground bar for additional LEDs. When using LEDs drawing more than 20µA or more than two for one effect they'll have to be switched via transistor and powered via the ESC, in which case it also makes sense to lead out a power bar.
+
+When adding LEDs the default pins are in this table. D13 is also the LED mounted on the Arduino, so if this one is visible no external LEDs are needed. If it is not visible at least one status-LED should be connected for safety - this LED signals throttle lock or error conditions. In a full LED setup the status LEDs should be used as rear lights.
+
+|        | Pin 1 | Pin 2 |
+|--------+-------+-------|
+| status | D13   | D2    |
+| front  | D11   | D12   |
+| effect | D4    | D5    |
