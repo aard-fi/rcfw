@@ -109,6 +109,8 @@
 #define RX_MID 1500
 #define RX_MAX 2000
 
+#define RX_TOLERANCE 30
+
 #if SERIAL_PROTOCOL == TX_IBUS
 IBusBM IBus;
 #elif SERIAL_PROTOCOL == TX_CRSF
@@ -125,7 +127,7 @@ Servo steering;
 Servo motor;
 Servo steering;
 #endif
-int ignition=1000;
+int ignition=RX_MIN;
 int led_state=0;
 int throttle_channel;
 int steering_channel;
@@ -149,13 +151,13 @@ void setup_controls(){
   int controls = crsf.getChannel(CONTROL_CHANNEL);
 #endif
 #else
-  int controls = 1000;
+  int controls = RX_MIN;
 #endif
 
 #if SERIAL_PROTOCOL == TX_IBUS
 #if RC_MODEL == NOTANK
   // throttle is only supported right due to support for reversing
-  if (controls == 1500){
+  if (controls == RX_MID){
     // throttle right, steering left
     throttle_channel=1;
     steering_channel=3;
@@ -169,11 +171,11 @@ void setup_controls(){
 #else
   // TODO, this needs a bit of work - right now the test here is with a pistol grip one,
   // where the channels are definitely correct
-  if (controls == 1500){
+  if (controls == RX_MID){
     // throttle right, steering left
     throttle_channel=1;
     steering_channel=3;
-  } else if (controls == 2000) {
+  } else if (controls == RX_MAX) {
     // throttle and steering right
     throttle_channel=1;
     steering_channel=0;
@@ -244,13 +246,13 @@ void setup() {
 
   // the calls here calibrate the neutral position for the ESC
 #if RC_MODEL == NOTANK
-  motor_left.attach(MOTOR_PIN_LEFT, 1000, 2000);
+  motor_left.attach(MOTOR_PIN_LEFT, RX_MIN, RX_MAX);
   motor_left.write(PWM_STOP);
-  motor_right.attach(MOTOR_PIN_RIGHT, 1000, 2000);
+  motor_right.attach(MOTOR_PIN_RIGHT, RX_MIN, RX_MAX);
   motor_right.write(PWM_STOP);
 
 #elif RC_MODEL == RC_BENCHY
-  motor.attach(MOTOR_PIN, 1000, 2000);
+  motor.attach(MOTOR_PIN, RX_MIN, RX_MAX);
   motor.write(PWM_STOP);
 
   steering.attach(SERVO_PIN);
@@ -260,7 +262,7 @@ void setup() {
   delay(1);
   steering.write(STEER_MID);
 #elif RC_MODEL == SNOW_MOBILE
-  motor.attach(MOTOR_PIN, 1000, 2000);
+  motor.attach(MOTOR_PIN, RX_MIN, RX_MAX);
   motor.write(PWM_STOP);
   steering.attach(SERVO_PIN);
   steering.write(STEER_MAX);
@@ -273,7 +275,7 @@ void setup() {
 }
 
 #if RC_MODEL == NOTANK
-void controls(int pwm_adjusted, int steer_pwm, int steer){
+void controls(int pwm_adjusted, int steer_pwm){
   int pwm_left, pwm_right;
 
   pwm_left = pwm_adjusted;
@@ -346,12 +348,12 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
   motor_right.write(pwm_right);
 }
 #elif RC_MODEL == RC_BENCHY
-void controls(int pwm_adjusted, int steer_pwm, int steer){
+void controls(int pwm_adjusted, int steer_pwm){
   // this should reverse steering when going forward; for reversing steering already should be OK
   if (pwm_adjusted >= PWM_STOP)
     steer_pwm = map(steer_pwm, 0, 180, 180, 0);
 
-  if (steer >= 1000 and steer <= 2000)
+  if (steer_pwm >= STEER_MIN and steer_pwm <= STEER_MAX)
     steering.write(steer_pwm);
   else
     steering.write(STEER_MID);
@@ -362,8 +364,8 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
 }
 #elif RC_MODEL == SNOW_MOBILE
 // this should work like that, but needs testing
-void controls(int pwm_adjusted, int steer_pwm, int steer){
-  if (steer >= 1000 and steer <= 2000)
+void controls(int pwm_adjusted, int steer_pwm){
+  if (steer_pwm >= STEER_MIN and steer_pwm <= STEER_MAX)
     steering.write(steer_pwm);
   else
     steering.write(STEER_MID);
@@ -373,7 +375,7 @@ void controls(int pwm_adjusted, int steer_pwm, int steer){
 #endif
 
 #if SERIAL_PROTOCOL == TX_CRSF
-void printChannels()
+void print_channels()
 {
   for (int ChannelNum = 1; ChannelNum <= 16; ChannelNum++)
   {
@@ -384,6 +386,22 @@ void printChannels()
   }
 }
 #endif
+
+// make sure value is inside of RX limits
+//
+// debug log shows values just being a bit over/under; if there are overflow issues
+// we might end up with large jumps - in which case we'd need to limit this check to just
+// max/min +- 20 or so
+int rx_adjust(int value, int fallback){
+  if (value <= RX_MIN && value >= RX_MIN - RX_TOLERANCE)
+    value = RX_MIN;
+  else if (value >= RX_MAX && value <= RX_MAX + RX_TOLERANCE)
+    value = RX_MAX;
+  else if (value <= RX_MIN - RX_TOLERANCE - 1 || value >= RX_MAX + RX_TOLERANCE + 1)
+    value = fallback;
+
+  return value;
+}
 
 void loop() {
 #if SERIAL_PROTOCOL == TX_IBUS
@@ -404,11 +422,11 @@ void loop() {
 #elif SERIAL_PROTOCOL == TX_CRSF
   //ignition = crsf.getChannel(IGNITION_CHANNEL);
   // TODO, figure out how to do ignition here as well
-  ignition = 2000;
+  ignition = RX_MAX;
 #endif
 
 
-  if (ignition != 2000){
+  if (ignition != RX_MAX){
 #if RC_MODEL == NOTANK
     motor_left.write(PWM_STOP);
     motor_right.write(PWM_STOP);
@@ -428,15 +446,9 @@ void loop() {
     debug_print(steer);
     int steer_pwm=0;
 
-    // debug log shows values just being a bit over/under; if there are overflow issues
-    // we might end up with large jumps - in which case we'd need to limit this check to just
-    // max/min +- 20 or so
-    if (steer<= 1000)
-      steer = 1000;
-    if (steer >= 2000)
-      steer = 2000;
+    steer = rx_adjust(steer, RX_MID);
 
-    if (steer >= 1000 and steer <= 2000){
+    if (steer >= RX_MIN and steer <= RX_MAX){
       steer_pwm = map(steer, RX_MIN, RX_MAX, STEER_MIN, STEER_MAX);
       debug_print(" pwm ");
       debug_print(steer_pwm);
@@ -448,6 +460,9 @@ void loop() {
     throttle = IBus.readChannel(throttle_channel);
 #elif SERIAL_PROTOCOL == TX_CRSF
     throttle = crsf.getChannel(throttle_channel);
+
+    // TODO, for the snow mobile we probably want a different fallback
+    throttle = rx_adjust(throttle, RX_MID);
 
 #endif
     debug_print(" Throttle: ");
@@ -477,7 +492,7 @@ void loop() {
     debug_print(" ");
     debug_print(pwm_adjusted);
 
-    controls(pwm_adjusted, steer_pwm, steer);
+    controls(pwm_adjusted, steer_pwm);
   }
 
 #if SERIAL_PROTOCOL == TX_IBUS
@@ -490,7 +505,7 @@ void loop() {
 
 #if SERIAL_PROTOCOL == TX_CRSF
   debug_print(" | ");
-  printChannels();
+  print_channels();
 #endif
 
   debug_println();
