@@ -4,26 +4,49 @@
 #define RC_BENCHY 2
 #define NOTANK 3
 
-#define TX_IBUS 1
-#define TX_CRSF 2
-
+// set thins to the model you're using from above list
+#ifndef RC_MODEL
 #define RC_MODEL NOTANK
-#define SERIAL_PROTOCOL TX_CRSF
-
-#if SERIAL_PROTOCOL == TX_IBUS
-#include <IBusBM.h>
-#elif SERIAL_PROTOCOL == TX_CRSF
-#include <AlfredoCRSF.h>
 #endif
+
+// I do not have a pistol grip FlySky transmitter - the first entry is a placeholder in case someone
+// wants to contribute that.
+#define FLYSKY_PG 1
+#define FLYSKY_ST 2
+#define RADIOMASTER_PG 3
+#define RADIOMASTER_ST 4
+
+// select the type of transmitter from above list. For pistol grip style transmitters
+// the first two channels should be the same, no matter the manufacturer. For stick style
+// transmitters the first four channels should be the same - so basic functionality should
+// work by just selecting a matching type.
+//
+// for extra functionality involving the switches and potis receiver specific configuration
+// may be required
+#ifndef TX_TYPE
+#define TX_TYPE RADIOMASTER_PG
+#endif
+
+// this must match the configured speed in the receiver
+// if the connection does not work double check that the receiver
+// is configured correctly
+#define CRSF_SPEED 420000
+
+// set this for logging complete channel status table (CRSF only)
+//#define DEBUG_CHANNELS 1
+
+// remove this to skip all debug messages. Note that the Nano already
+// doesn't log due to the single serial port.
+#define DEBUG_MESSAGES 1
 
 /*
  The further you go down the defines the less likely you should
  want to change something.
 
- Channel numbers are C indexes, i.e., one less than your transmitter
- shows you.
+ For IBUS channel numbers are C indexes, i.e., one less than your transmitter
+ shows you. For CRSF the channel numbers match the numbers on the transmitter.
 
- PWM vamotoruuulues are based on the servo library, ranging from 0 to 180 - not
+ PWM motor ranges are based on the servo library, ranging from 0 to 180 - not
  the native 0-255 of Arduino PWM (which is a wrong frequency)..
 */
 
@@ -61,16 +84,33 @@
 #define EFFECT_LEDS {4,5}
 #endif
 
+// !!! for the channel defines here, remember that FlySky starts at 0, while others
+//     start at 1
+
 // this should be a three state switch, and needs to be setup as aux channel
-// comment this definition if you don't want that feature
+// comment this definition if you don't want that feature. Remapping channels
+// doesn't make that much sense on pistol grip style transmitters, so currentnly
+// this is only supported on stick types.
+#if TX_TYPE == FLYSKY_ST
 #define CONTROL_CHANNEL 7
+#elif TX_TYPE == RADIOMASTER_ST
+#define CONTROL_CHANNEL 7
+#endif
 
 // a two state switch, preventing throttle to engage unless switched on
 // this also reduces the risk of frying your Arduino here, and generally
 // makes things safer, so this is no longer optional
+#if TX_TYPE == FLYSKY_ST
 #define IGNITION_CHANNEL 6
+#elif TX_TYPE == RADIOMASTER_ST
+#define IGNITION_CHANNEL 5
+#elif TX_TYPE == RADIOMASTER_PG
+#define IGNITION_CHANNEL 9
+#endif
 
+#if TX_TYPE == FLYSKY_ST
 #define EFFECT_CHANNEL 5
+#endif
 
 /*
   This configures an input (default: VRA on channel 5) to adjust the speed
@@ -81,8 +121,18 @@
   up to full speed with VRA on max.
 
   Comment the SPEED_CHANNEL definition if you don't want that.
+
+  TODO: we need special handling for PG transmitters - the poti on the radiomaster has
+        its default at mid point, which is way more useful than the default min ones
+        of the stick transmitters.
 */
+#if TX_TYPE == FLYSKY_ST
 #define SPEED_CHANNEL 4
+#elif TX_TYPE == RADIOMASTER_ST
+#define SPEED_CHANNEL 10
+#elif TX_TYPE == RADIOMASTER_PG
+#define SPEED_CHANNEL 5
+#endif
 #define SPEED_MIN 90
 #define SPEED_MAX 180
 
@@ -111,9 +161,20 @@
 
 #define RX_TOLERANCE 30
 
+#define TX_IBUS 1
+#define TX_CRSF 2
+
+#if TX_TYPE <= FLYSKY_ST
+#define SERIAL_PROTOCOL TX_IBUS
+#else
+#define SERIAL_PROTOCOL TX_CRSF
+#endif
+
 #if SERIAL_PROTOCOL == TX_IBUS
+#include <IBusBM.h>
 IBusBM IBus;
 #elif SERIAL_PROTOCOL == TX_CRSF
+#include <AlfredoCRSF.h>
 AlfredoCRSF crsf;
 #endif
 
@@ -154,6 +215,9 @@ void setup_controls(){
   int controls = RX_MIN;
 #endif
 
+  if (controls <= RX_MIN)
+    controls = RX_MIN;
+
 #if SERIAL_PROTOCOL == TX_IBUS
 #if RC_MODEL == NOTANK
   // throttle is only supported right due to support for reversing
@@ -169,8 +233,6 @@ void setup_controls(){
     failsafe_channel=3;
   }
 #else
-  // TODO, this needs a bit of work - right now the test here is with a pistol grip one,
-  // where the channels are definitely correct
   if (controls == RX_MID){
     // throttle right, steering left
     throttle_channel=1;
@@ -186,9 +248,28 @@ void setup_controls(){
   }
 #endif
 #else
-  // channels start at 1
-  steering_channel=1;
-  throttle_channel=2;
+#if RC_MODEL == NOTANK
+  // throttle is only supported right due to support for reversing
+  if (controls == RX_MID){
+    // throttle right, steering left
+    throttle_channel=2;
+    steering_channel=4;
+  } else {
+    // throttle and steering right
+    steering_channel=1;
+    throttle_channel=2;
+  }
+#else
+  if (controls == RX_MID){
+    // throttle right, steering left
+    throttle_channel=2;
+    steering_channel=4;
+  } else {
+    // throttle and steering right
+    steering_channel=1;
+    throttle_channel=2;
+  }
+#endif
 #endif
 }
 
@@ -218,15 +299,20 @@ void setup() {
   pinMode(POWER_LED, OUTPUT);
 
 #ifdef ARDUINO_AVR_NANO_EVERY
+#ifdef DEBUG_MESSAGES
 #define debug_print Serial.print
 #define debug_println Serial.println
+#else
+#define debug_print(...) ((void)0)
+#define debug_println(...) ((void)0)
+#endif
   Serial.begin(115200);
   // on the Every the internal timer doesn't work - so disable it here,
   // and manually call loop() in the loop
 #if SERIAL_PROTOCOL == TX_IBUS
   IBus.begin(Serial1,IBUSBM_NOTIMER);
 #elif SERIAL_PROTOCOL == TX_CRSF
-  Serial1.begin(420000);
+  Serial1.begin(CRSF_SPEED);
   crsf.begin(Serial1);
   debug_println("Setting up CRSF on port 1");
 #endif
@@ -417,14 +503,13 @@ void loop() {
 
 #if SERIAL_PROTOCOL == TX_IBUS
   ignition = IBus.readChannel(IGNITION_CHANNEL);
-  debug_print(" Ignition: ");
-  debug_print(ignition);
 #elif SERIAL_PROTOCOL == TX_CRSF
-  //ignition = crsf.getChannel(IGNITION_CHANNEL);
-  // TODO, figure out how to do ignition here as well
-  ignition = RX_MAX;
+  ignition = crsf.getChannel(IGNITION_CHANNEL);
 #endif
 
+  debug_print(" Ignition: ");
+  debug_print(ignition);
+  debug_print(" ");
 
   if (ignition != RX_MAX){
 #if RC_MODEL == NOTANK
@@ -437,11 +522,13 @@ void loop() {
     set_led(power_leds, led_state, led_cycle);
   } else {
     int steer;
+
 #if SERIAL_PROTOCOL == TX_IBUS
     steer = IBus.readChannel(steering_channel);
 #elif SERIAL_PROTOCOL == TX_CRSF
     steer = crsf.getChannel(steering_channel);
 #endif
+
     debug_print("Steer: ");
     debug_print(steer);
     int steer_pwm=0;
@@ -460,11 +547,11 @@ void loop() {
     throttle = IBus.readChannel(throttle_channel);
 #elif SERIAL_PROTOCOL == TX_CRSF
     throttle = crsf.getChannel(throttle_channel);
+#endif
 
     // TODO, for the snow mobile we probably want a different fallback
     throttle = rx_adjust(throttle, RX_MID);
 
-#endif
     debug_print(" Throttle: ");
     debug_print(throttle);
 
@@ -477,8 +564,8 @@ void loop() {
 #elif SERIAL_PROTOCOL == TX_CRSF
     int pwm_max_raw = crsf.getChannel(SPEED_CHANNEL);
 #endif
-    int pwm_max = map(pwm_max_raw, RX_MIN, RX_MAX, SPEED_MIN, SPEED_MAX);
 
+    int pwm_max = map(pwm_max_raw, RX_MIN, RX_MAX, SPEED_MIN, SPEED_MAX);
     int pwm_adjusted = 0;
 
     // to compensate for wonky remote midpoint adjust +- 10
@@ -505,7 +592,9 @@ void loop() {
 
 #if SERIAL_PROTOCOL == TX_CRSF
   debug_print(" | ");
+#ifdef DEBUG_CHANNELS
   print_channels();
+#endif
 #endif
 
   debug_println();
