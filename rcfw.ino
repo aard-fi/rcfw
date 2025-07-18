@@ -131,7 +131,10 @@
 #elif TX_TYPE == RADIOMASTER_ST
 #define SPEED_CHANNEL 10
 #elif TX_TYPE == RADIOMASTER_PG
-#define SPEED_CHANNEL 5
+// For some reason the poti on channel 5 behaves like a switch - the other one works.
+// Speed channel is somewhat important, so better to have that on a channel that works
+// out of the box.
+#define SPEED_CHANNEL 6
 #endif
 #define SPEED_MIN 90
 #define SPEED_MAX 180
@@ -364,7 +367,7 @@ void setup() {
 }
 
 #if RC_MODEL == NOTANK
-void controls(int pwm_adjusted, int steer_pwm){
+void controls(int pwm_adjusted, int steer_pwm, int throttle_max){
   int pwm_left, pwm_right;
 
   pwm_left = pwm_adjusted;
@@ -420,6 +423,12 @@ void controls(int pwm_adjusted, int steer_pwm){
     }
   }
 
+  // ability to slow down improves handling quite a bit, but will require additional
+  // steering optimisation as that leads one of the tracks more often into low
+  // speed cutoff now
+  pwm_left = map(pwm_left, 0, 180, 45 - throttle_max, 135 + throttle_max);
+  pwm_right = map(pwm_right, 0, 180, 45 - throttle_max, 135 + throttle_max);
+
   debug_print(" adjusted left ");
   debug_print(pwm_left);
   debug_print(" right ");
@@ -437,7 +446,7 @@ void controls(int pwm_adjusted, int steer_pwm){
   motor_right.write(pwm_right);
 }
 #elif RC_MODEL == RC_BENCHY
-void controls(int pwm_adjusted, int steer_pwm){
+void controls(int pwm_adjusted, int steer_pwm, int throttle_max){
   // this should reverse steering when going forward; for reversing steering already should be OK
   if (pwm_adjusted >= PWM_STOP)
     steer_pwm = map(steer_pwm, 0, 180, 180, 0);
@@ -453,7 +462,7 @@ void controls(int pwm_adjusted, int steer_pwm){
 }
 #elif RC_MODEL == SNOW_MOBILE
 // this should work like that, but needs testing
-void controls(int pwm_adjusted, int steer_pwm){
+void controls(int pwm_adjusted, int steer_pwm, int throttle_max){
   if (steer_pwm >= STEER_MIN and steer_pwm <= STEER_MAX)
     steering.write(steer_pwm);
   else
@@ -563,12 +572,12 @@ void loop() {
     //       also might be dropped completely - motor seems to be correctly
     //       sized here, so might not be needed at all.
 #if SERIAL_PROTOCOL == TX_IBUS
-    int pwm_max_raw = IBus.readChannel(SPEED_CHANNEL);
+    int throttle_max_raw = IBus.readChannel(SPEED_CHANNEL);
 #elif SERIAL_PROTOCOL == TX_CRSF
-    int pwm_max_raw = crsf.getChannel(SPEED_CHANNEL);
+    int throttle_max_raw = crsf.getChannel(SPEED_CHANNEL);
 #endif
 
-    int pwm_max = map(pwm_max_raw, RX_MIN, RX_MAX, SPEED_MIN, SPEED_MAX);
+    int throttle_max = map(throttle_max_raw, RX_MIN, RX_MAX, -45, 45);
     int pwm_adjusted = 0;
 
     // to compensate for wonky remote midpoint adjust +- 10
@@ -582,7 +591,7 @@ void loop() {
     debug_print(" ");
     debug_print(pwm_adjusted);
 
-    controls(pwm_adjusted, steer_pwm);
+    controls(pwm_adjusted, steer_pwm, throttle_max);
   }
 
 #if SERIAL_PROTOCOL == TX_IBUS
