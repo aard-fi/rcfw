@@ -3,6 +3,7 @@
     - [[#working-features][Working features]]
       - [[#general][General]]
       - [[#notanks][NoTankS]]
+    - [[#building][Building]]
     - [[#planned-features][Planned features]]
       - [[#general-1][General]]
       - [[#notanks-1][NoTankS]]
@@ -10,7 +11,7 @@
       - [[#flysky-hardware][Flysky hardware]]
       - [[#elrs-hardware][ELRS hardware]]
   - [[#modified-parts][Modified parts]]
-  - [[#transmitter-setup][Transmitter setup]]
+  - [[#rc-hardware][RC hardware]]
     - [[#pistol-grip-elrs-transmitter][Pistol grip ELRS transmitter]]
     - [[#elrs-transmitter][ELRS transmitter]]
     - [[#flysky-transmitter][Flysky transmitter]]
@@ -20,6 +21,10 @@
     - [[#notanks-2][NoTanks]]
     - [[#rc-benchy][RC Benchy]]
     - [[#led-setup][LED setup]]
+  - [[#transmitter-channels][Transmitter channels]]
+    - [[#default-channel-mapping-for-radiomaster-mt12][Default channel mapping for Radiomaster MT12]]
+    - [[#default-channel-mapping-for-radiomaster-pocket][Default channel mapping for Radiomaster Pocket]]
+    - [[#default-channel-mapping-for-flysky-fs-i6][Default channel mapping for Flysky FS-i6]]
 
 ** Introduction
 
@@ -48,6 +53,16 @@ Ignition switching, control remapping and dynamic speed control currently can be
 **** NoTankS
 - turning based on accelerating or decelerating one side, depending on the current speed. This also allows turning at zero speed
 - curves for low speed cutoff to keep the motors cooler
+
+*** Building
+
+Get the [[https://www.arduino.cc/en/software][Arduino IDE]], and the following libraries:
+
+- the [[https://github.com/arduino-libraries/Servo][servo library]]
+- for CRSF use [[https://github.com/AlfredoSystems/AlfredoCRSF][AlfredoCRSF]]
+- for IBUS use [[https://github.com/bmellink/IBusBM][IBusBM]]
+
+Configure the correct board (Nano or Nano Every are supported, Every recommended), and go through the defines at the beginning of the file to configure the build for your model and transmitter setup.
 
 *** Planned features
 **** General
@@ -88,7 +103,7 @@ For some of the models I've modified parts. You can find those in separate repos
 - [[https://github.com/bwachter/arctic_tinyrider][Arctic Tinyrider]]
 - [[https://github.com/bwachter/notanks/][NoTankS]]
 
-** Transmitter setup
+** RC hardware
 
 Both throttle curve and trim settings will change the values sent by the transmitter. Currently the assumption is that for our models we can adjust those settings on the Arduino, so adjusted input may be improperly handled - don't use that.
 
@@ -97,28 +112,17 @@ With the default setup of steering at channel 1 and throttle at channel two basi
 
 Remapping of throttle and steering is not supported as it does not make much sense with that style of transmitter.
 
-Switches currently also are not yet supported, the model will start with ignition on.
+The ignition switch is expected on channel 9.
 
 *** ELRS transmitter
 This setup is currently untested, but should be working.
 
+The ignition switch is expected on channel 5, which should be one of the two-state switches in the default configuration.
+
 *** Flysky transmitter
-To use all features your transmitter should have the channels configured like this:
+At least the FS-i6 requires extra setup for the switches, see the transmitter section below for details.
 
-1. right stick, left/right
-2. right stick, up/down
-3. left stick, up/down (range changes based on throttle curve)
-4. left stick, left/right
-5. left dial VRA
-6. right dial VRB
-7. SWA
-8. SWB
-9. SWC
-10. SWD
-
-VRA/VRB are configured on channels 5/6 per default in 'aux channel setup', while the switches are not assigned.
-
-Note that both throttle curve and trim settings will mess with the values sent by the transmitter - and probably should all be disabled.
+The ignition switch is expected on channel 7.
 
 *** 6 channel receivers
 
@@ -179,3 +183,59 @@ When adding LEDs the default pins are in this table. D13 is also the LED mounted
 | status | D13   | D2    |
 | front  | D11   | D12   |
 | effect | D4    | D5    |
+
+** Transmitter channels
+This section contains tables about channel setups for all tested transmitters, with information on how to set up additional switches, if needed.
+
+*** Default channel mapping for Radiomaster MT12
+
+| Channel | Trigger  | Type            | Comments                               |
+|---------+----------+-----------------+----------------------------------------|
+|       1 | wheel    |                 |                                        |
+|       2 | throttle |                 |                                        |
+|       3 | SA       | switch, 3 state | default 1000                           |
+|       4 | SB       | button          | default 1000, starts timer per default |
+|       5 | P1       | poti            | default 1500                           |
+|       6 | P2       | poti            | default 1500                           |
+|       7 | SC       | button, 2 state | default 1000                           |
+|       8 | SD       | button, 2 state | default 1000                           |
+|       9 | FL1      | switch, 2 state | default 1000, expansion module (front) |
+|      10 | FL2      | switch, 2 state | default 1000, expansion module (back)  |
+
+The expansion module is inactive per default, to configure it:
+
+- go to hardware settings, and set S3/S4 to =switch=
+- scroll down, and set =FL1= to =S3=, =FL2= to =S4=, both with =2POS=
+- go to model settings, mixes page, and add channel 9 with FL1, channel 10 with FL2
+
+*** Default channel mapping for Radiomaster Pocket
+
+| Channel | Trigger                 | Type            | Comments     |
+|---------+-------------------------+-----------------+--------------|
+|       1 | right stick, left/right |                 |              |
+|       2 | right stick, up/down    |                 |              |
+|       3 | left stick, up/down     |                 | default 1000 |
+|       4 | left stick, left/right  |                 |              |
+|       5 | SA                      | switch, 2 state | default 1000 |
+|       6 | SB                      | switch, 3 state | default 1000 |
+|       7 | SC                      | switch, 3 state | default 1000 |
+|       8 | SD                      | switch, 2 state | default 1000 |
+|       9 | SE                      | button, 2 state | default 1000 |
+|      10 | SI                      | poti            | default 1000 |
+
+*** Default channel mapping for Flysky FS-i6
+
+| Channel | Trigger                 | Type            | Comments     |
+|---------+-------------------------+-----------------+--------------|
+|       1 | right stick, left/right |                 |              |
+|       2 | right stick, up/down    |                 |              |
+|       3 | left stick, up/down     |                 | default 1000 |
+|       4 | left stick, left/right  |                 |              |
+|       5 | VRA                     | poti            | default 1000 |
+|       6 | VRB                     | poti            | default 1000 |
+|       7 | SWA                     | switch, 3 state | default 1000 |
+|       8 | SWB                     | switch, 2 state | default 1000 |
+|       9 | SWC                     | switch, 2 state | default 1000 |
+|      10 | SWD                     | switch          | default 1000 |
+
+VRA/VRB are configured on channels 5/6 per default in 'aux channel setup', while the switches are not assigned.
