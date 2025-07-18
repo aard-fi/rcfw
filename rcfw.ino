@@ -143,6 +143,8 @@
 // move, at cost of slight input delay.
 #define LOOP_DELAY 20
 
+#define DEBUG_DELAY 10
+
 #define PWM_MIN 0
 #define PWM_MID 90
 #define PWM_MAX 180
@@ -190,6 +192,7 @@ Servo steering;
 #endif
 int ignition=RX_MIN;
 int led_state=0;
+int debug_state=0;
 int throttle_channel;
 int steering_channel;
 int failsafe_channel;
@@ -300,8 +303,8 @@ void setup() {
 
 #ifdef ARDUINO_AVR_NANO_EVERY
 #ifdef DEBUG_MESSAGES
-#define debug_print Serial.print
-#define debug_println Serial.println
+#define debug_print if (debug_state == 0) Serial.print
+#define debug_println if (debug_state == 0) Serial.println
 #else
 #define debug_print(...) ((void)0)
 #define debug_println(...) ((void)0)
@@ -598,6 +601,10 @@ void loop() {
 #endif
 
   debug_println();
+
+  debug_state++;
+  if (debug_state >= DEBUG_DELAY)
+    debug_state = 0;
 
   delay(LOOP_DELAY);
 }
