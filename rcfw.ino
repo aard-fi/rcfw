@@ -1,4 +1,5 @@
 #include <Servo.h>
+#include <avr/wdt.h>
 
 #define SNOW_MOBILE 1
 #define RC_BENCHY 2
@@ -139,6 +140,12 @@
 #define SPEED_MIN 90
 #define SPEED_MAX 180
 
+// The receiver should be connected to this pin via a NPN transistor to enable
+// power cycling it when the Arduino restarts. With ELRS receivers and binding
+// phrases this allows easy switching of controllers during play without having
+// to touch the model
+#define POWER_PIN A7
+
 // time LED should remain in a specific status. This is per loop - so
 // take LOOP_DELAY into account as well.
 #define LED_DELAY 10
@@ -175,6 +182,12 @@
 #define SERIAL_PROTOCOL TX_CRSF
 #endif
 
+#if SERIAL_PROTOCOL == TX_CRSF
+// defines how many loop cycles we wait when link has been lost before
+// resetting.
+#define LINK_DOWN_DELAY 1000
+#endif
+
 #if SERIAL_PROTOCOL == TX_IBUS
 #include <IBusBM.h>
 IBusBM IBus;
@@ -196,6 +209,9 @@ Servo steering;
 int ignition=RX_MIN;
 int led_state=0;
 int debug_state=0;
+#ifdef LINK_DOWN_DELAY
+int linkdown_state=0;
+#endif
 int throttle_channel;
 int steering_channel;
 int failsafe_channel;
@@ -303,6 +319,10 @@ void set_led(int leds[], int cycle, int effect){
 
 void setup() {
   pinMode(POWER_LED, OUTPUT);
+  pinMode(POWER_PIN, OUTPUT);
+  digitalWrite(POWER_PIN, LOW);
+  delay(500);
+  digitalWrite(POWER_PIN, HIGH);
 
 #ifdef ARDUINO_AVR_NANO_EVERY
 #ifdef DEBUG_MESSAGES
@@ -363,6 +383,26 @@ void setup() {
   delay(1);
   steering.write(STEER_MID);
 #endif
+
+  wdt_enable(WDTO_2S);
+
+#if SERIAL_PROTOCOL == TX_CRSF
+  crsf.update();
+  int ch4 = crsf.getChannel(4);
+  int loop = 0;
+  while(ch4 <= RX_MIN - RX_TOLERANCE - 1){
+    debug_print(ch4);
+    debug_print(" waiting for CRSF transmitter...");
+    debug_println(loop);
+    loop++;
+    delay(500);
+    crsf.update();
+    ch4 = crsf.getChannel(4);
+    if (loop <= 60)
+      wdt_reset();
+  }
+#endif
+
   setup_controls();
 }
 
@@ -502,6 +542,8 @@ int rx_adjust(int value, int fallback){
 }
 
 void loop() {
+  wdt_reset();
+
 #if SERIAL_PROTOCOL == TX_IBUS
   IBus.loop();
 #elif SERIAL_PROTOCOL == TX_CRSF
@@ -511,12 +553,27 @@ void loop() {
     led_state = LED_DELAY*-1;
   led_state++;
 
+#ifdef LINK_DOWN_DELAY
+  if (crsf.isLinkUp() == false){
+    ignition = RX_MIN;
+    debug_print(" link down: ");
+    debug_print(linkdown_state);
+    debug_print(" ");
+    if (linkdown_state >= LINK_DOWN_DELAY)
+      delay(5000);
+
+    linkdown_state++;
+  } else
+      linkdown_state = 0;
+#endif
+
   setup_controls();
 
 #if SERIAL_PROTOCOL == TX_IBUS
   ignition = IBus.readChannel(IGNITION_CHANNEL);
 #elif SERIAL_PROTOCOL == TX_CRSF
-  ignition = crsf.getChannel(IGNITION_CHANNEL);
+  if (crsf.isLinkUp() == true)
+    ignition = crsf.getChannel(IGNITION_CHANNEL);
 #endif
 
   debug_print(" Ignition: ");
