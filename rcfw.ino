@@ -68,7 +68,7 @@ const channel_mapping radiomaster_pg_mapping = {
 // for extra functionality involving the switches and potis receiver specific configuration
 // may be required
 #ifndef TX_TYPE
-#define TX_TYPE RADIOMASTER_PG
+#define TX_TYPE RADIOMASTER
 #endif
 
 // this must match the configured speed in the receiver
@@ -388,6 +388,24 @@ void setup() {
     if (loop <= 60)
       wdt_reset();
   }
+
+#if TX_TYPE == RADIOMASTER
+  debug_println("");
+  debug_print("Channel 4: ");
+  debug_println(ch4);
+  if (ch4 >= RX_MIN - RX_TOLERANCE && ch4 <= RX_MIN + RX_TOLERANCE){
+    current_tx = RADIOMASTER_PG;
+  } else if (ch4 >= RX_MID - RX_TOLERANCE && ch4 <= RX_MID + RX_TOLERANCE){
+    current_tx = RADIOMASTER_ST;
+  } else {
+    debug_print("Unable to identify remote type");
+    delay(10000);
+  }
+
+  // this relies on the model restarting to detect remote control changes.
+  // if we want to do that during runtime that needs to move to setup_controls
+  tx_mapping = get_tx_mapping(current_tx);
+#endif
 #endif
 
   setup_controls();
@@ -531,6 +549,10 @@ int rx_adjust(int value, int fallback){
 void loop() {
   wdt_reset();
 
+  debug_print("tx: ");
+  debug_print(current_tx);
+  debug_print(" ");
+
 #if SERIAL_PROTOCOL == TX_IBUS
   IBus.loop();
 #elif SERIAL_PROTOCOL == TX_CRSF
@@ -565,7 +587,9 @@ void loop() {
 #endif
   }
 
-  debug_print(" Ignition: ");
+  debug_print(" Ignition(");
+  debug_print(tx_mapping.ignition_channel);
+  debug_print("): ");
   debug_print(ignition);
   debug_print(" ");
 
