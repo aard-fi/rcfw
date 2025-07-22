@@ -10,12 +10,55 @@
 #define RC_MODEL NOTANK
 #endif
 
+
+struct channel_mapping {
+    int control_channel;
+    int ignition_channel;
+    int effect_channel;
+    int speed_channel;
+};
+
+// if we have no idea what the remote control is just disable
+// all the fancy extra channels
+const channel_mapping default_mapping = {
+  .control_channel = -1,
+  .ignition_channel = -1,
+  .effect_channel = -1,
+  .speed_channel = -1
+};
+
+const channel_mapping flysky_st_mapping = {
+  .control_channel = 7,
+  .ignition_channel = 6,
+  .effect_channel = 5,
+  .speed_channel = 4
+};
+
+const channel_mapping radiomaster_st_mapping = {
+  .control_channel = 7,
+  .ignition_channel = 5,
+  .effect_channel = -1,
+  .speed_channel = 10
+};
+
+const channel_mapping radiomaster_pg_mapping = {
+  .control_channel = -1,
+  .ignition_channel = 5,
+  .effect_channel = -1,
+  .speed_channel = 6
+};
+
 // I do not have a pistol grip FlySky transmitter - the first entry is a placeholder in case someone
 // wants to contribute that.
+//
+// The generic manufacturer types are used for type auto detection. For the Radiomaster ones we can
+// use channel 4 to check the type: PG has it at 1000 as default, while stick has it at 1500.
 #define FLYSKY_PG 1
 #define FLYSKY_ST 2
-#define RADIOMASTER_PG 3
-#define RADIOMASTER_ST 4
+#define FLYSKY 3
+#define RADIOMASTER_PG 4
+#define RADIOMASTER_ST 5
+#define RADIOMASTER 6
 
 // select the type of transmitter from above list. For pistol grip style transmitters
 // the first two channels should be the same, no matter the manufacturer. For stick style
@@ -85,58 +128,15 @@
 #define EFFECT_LEDS {4,5}
 #endif
 
-// !!! for the channel defines here, remember that FlySky starts at 0, while others
-//     start at 1
-
-// this should be a three state switch, and needs to be setup as aux channel
-// comment this definition if you don't want that feature. Remapping channels
-// doesn't make that much sense on pistol grip style transmitters, so currentnly
-// this is only supported on stick types.
-#if TX_TYPE == FLYSKY_ST
-#define CONTROL_CHANNEL 7
-#elif TX_TYPE == RADIOMASTER_ST
-#define CONTROL_CHANNEL 7
-#endif
-
-// a two state switch, preventing throttle to engage unless switched on
-// this also reduces the risk of frying your Arduino here, and generally
-// makes things safer, so this is no longer optional
-#if TX_TYPE == FLYSKY_ST
-#define IGNITION_CHANNEL 6
-#elif TX_TYPE == RADIOMASTER_ST || TX_TYPE == RADIOMASTER_PG
-#define IGNITION_CHANNEL 5
-#endif
-
-#if TX_TYPE == FLYSKY_ST
-#define EFFECT_CHANNEL 5
-#endif
-
 /*
-  This configures an input (default: VRA on channel 5) to adjust the speed
-  curve.
-
-  The speed curve itself needs adjustment below and recompilation to change.
-  Default settings have roughly half the maximum speed with VRA on zero, going
-  up to full speed with VRA on max.
-
-  Comment the SPEED_CHANNEL definition if you don't want that.
-
-  TODO: we need special handling for PG transmitters - the poti on the radiomaster has
-        its default at mid point, which is way more useful than the default min ones
-        of the stick transmitters.
+This is the default speed curve for dynamic speed adjustment, which allows adjusting from
+0% to 100%, on a model which does have reversing. Adjusting it is not tested, though, and
+may need somewhat more complicated speed calculations: currently models which support
+speed adjustment just start at min-45 and max-45, and add those speed adjustments in, which
+expands to the whole range.
 */
-#if TX_TYPE == FLYSKY_ST
-#define SPEED_CHANNEL 4
-#elif TX_TYPE == RADIOMASTER_ST
-#define SPEED_CHANNEL 10
-#elif TX_TYPE == RADIOMASTER_PG
-// For some reason the poti on channel 5 behaves like a switch - the other one works.
-// Speed channel is somewhat important, so better to have that on a channel that works
-// out of the box.
-#define SPEED_CHANNEL 6
-#endif
-#define SPEED_MIN 90
-#define SPEED_MAX 180
+#define SPEED_MIN -45
+#define SPEED_MAX 45
 
 // The receiver should be connected to this pin via a NPN transistor to enable
 // power cycling it when the Arduino restarts. With ELRS receivers and binding
@@ -174,7 +174,7 @@
 #define TX_IBUS 1
 #define TX_CRSF 2
 
-#if TX_TYPE <= FLYSKY_ST
+#if TX_TYPE <= FLYSKY
 #define SERIAL_PROTOCOL TX_IBUS
 #else
 #define SERIAL_PROTOCOL TX_CRSF
@@ -224,16 +224,28 @@ enum led_effects{
   led_cycle
 };
 
+channel_mapping get_tx_mapping(int type){
+  switch(type){
+    case FLYSKY_ST: return flysky_st_mapping;
+    case RADIOMASTER_ST: return radiomaster_st_mapping;
+    case RADIOMASTER_PG: return radiomaster_pg_mapping;
+    default: return default_mapping;
+  }
+}
+
+int current_tx = TX_TYPE;
+channel_mapping tx_mapping = get_tx_mapping(current_tx);
+
 void setup_controls(){
-#ifdef CONTROL_CHANNEL
+  int controls;
+  if (tx_mapping.control_channel >= 1){
 #if SERIAL_PROTOCOL == TX_IBUS
-  int controls = IBus.readChannel(CONTROL_CHANNEL);
+    controls = IBus.readChannel(tx_mapping.control_channel);
 #elif SERIAL_PROTOCOL == TX_CRSF
-  int controls = crsf.getChannel(CONTROL_CHANNEL);
+    controls = crsf.getChannel(tx_mapping.control_channel);
+  } else
 #endif
-#else
-  int controls = RX_MIN;
-#endif
+    controls = RX_MIN;
 
   if (controls <= RX_MIN)
     controls = RX_MIN;
@@ -567,12 +579,14 @@ void loop() {
 
   setup_controls();
 
+  if (tx_mapping.ignition_channel >= 1){
 #if SERIAL_PROTOCOL == TX_IBUS
-  ignition = IBus.readChannel(IGNITION_CHANNEL);
+    ignition = IBus.readChannel(tx_mapping.ignition_channel);
 #elif SERIAL_PROTOCOL == TX_CRSF
-  if (crsf.isLinkUp() == true)
-    ignition = crsf.getChannel(IGNITION_CHANNEL);
+    if (crsf.isLinkUp() == true)
+      ignition = crsf.getChannel(tx_mapping.ignition_channel);
 #endif
+  }
 
   debug_print(" Ignition: ");
   debug_print(ignition);
@@ -626,13 +640,17 @@ void loop() {
     //       forward speed. Should be applied to both forward/reverse. But
     //       also might be dropped completely - motor seems to be correctly
     //       sized here, so might not be needed at all.
+    int throttle_max_raw = 1500;
+    if (tx_mapping.speed_channel >= 0){
 #if SERIAL_PROTOCOL == TX_IBUS
-    int throttle_max_raw = IBus.readChannel(SPEED_CHANNEL);
+      throttle_max_raw = IBus.readChannel(tx_mapping.speed_channel);
 #elif SERIAL_PROTOCOL == TX_CRSF
-    int throttle_max_raw = crsf.getChannel(SPEED_CHANNEL);
+      throttle_max_raw = crsf.getChannel(tx_mapping.speed_channel);
 #endif
+    }
 
-    int throttle_max = map(throttle_max_raw, RX_MIN, RX_MAX, -45, 45);
+
+    int throttle_max = map(throttle_max_raw, RX_MIN, RX_MAX, SPEED_MIN, SPEED_MAX);
     int pwm_adjusted = 0;
 
     // to compensate for wonky remote midpoint adjust +- 10
