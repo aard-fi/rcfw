@@ -199,14 +199,27 @@ This section contains tables about channel setups for all tested transmitters, w
 |       6 | P2       | poti            | default 1500                           |
 |       7 | SC       | button, 2 state | default 1000                           |
 |       8 | SD       | button, 2 state | default 1000                           |
-|       9 | FL1      | switch, 2 state | default 1000, expansion module (front) |
+
+Note that channel 5 for ELRS is typically a 1 bit channel for arming - and as such the first poti mapped to channel 5 is not ideal. This firmware assumes that it got remapped to channel 5, and the expansion module with the two switches got installed and mapped, leading to the following configuration:
+
+| Channel | Trigger  | Type            | Comments                               |
+|---------+----------+-----------------+----------------------------------------|
+|       1 | wheel    |                 |                                        |
+|       2 | throttle |                 |                                        |
+|       3 | SA       | switch, 3 state | default 1000                           |
+|       4 | SB       | button          | default 1000, starts timer per default |
+|       5 | FL1      | switch, 2 state | default 1000, expansion module (front) |
+|       6 | P2       | poti            | default 1500                           |
+|       7 | SC       | button, 2 state | default 1000                           |
+|       8 | SD       | button, 2 state | default 1000                           |
+|       9 | P1       | poti            | default 1500                           |
 |      10 | FL2      | switch, 2 state | default 1000, expansion module (back)  |
 
-The expansion module is inactive per default, to configure it:
+To configure the expansion module
 
 - go to hardware settings, and set S3/S4 to =switch=
 - scroll down, and set =FL1= to =S3=, =FL2= to =S4=, both with =2POS=
-- go to model settings, mixes page, and add channel 9 with FL1, channel 10 with FL2
+- go to model settings, mixes page, and change channel 5 to FL1, add channel 9 with S1, and add channel 10 with FL2
 
 *** Default channel mapping for Radiomaster Pocket
 

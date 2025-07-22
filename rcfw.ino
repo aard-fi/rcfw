@@ -103,10 +103,8 @@
 // makes things safer, so this is no longer optional
 #if TX_TYPE == FLYSKY_ST
 #define IGNITION_CHANNEL 6
-#elif TX_TYPE == RADIOMASTER_ST
+#elif TX_TYPE == RADIOMASTER_ST || TX_TYPE == RADIOMASTER_PG
 #define IGNITION_CHANNEL 5
-#elif TX_TYPE == RADIOMASTER_PG
-#define IGNITION_CHANNEL 9
 #endif
 
 #if TX_TYPE == FLYSKY_ST
