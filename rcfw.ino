@@ -10,7 +10,6 @@
 #define RC_MODEL NOTANK
 #endif
 
-
 struct channel_mapping {
     int control_channel;
     int ignition_channel;
@@ -208,7 +207,6 @@ int linkdown_state=0;
 #endif
 int throttle_channel;
 int steering_channel;
-int failsafe_channel;
 
 int power_leds[]=POWER_LEDS;
 int front_leds[]=FRONT_LEDS;
@@ -677,14 +675,6 @@ void loop() {
 
     controls(pwm_adjusted, steer_pwm, throttle_max);
   }
-
-#if SERIAL_PROTOCOL == TX_IBUS
-  int failsafe = IBus.readChannel(failsafe_channel-1);
-#elif SERIAL_PROTOCOL == TX_CRSF
-  int failsafe = crsf.getChannel(failsafe_channel);
-#endif
-//  debug_print(" failsafe ");
-//  debug_print(failsafe);
 
 #if SERIAL_PROTOCOL == TX_CRSF
   debug_print(" | ");
