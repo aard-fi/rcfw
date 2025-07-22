@@ -112,17 +112,16 @@ const channel_mapping radiomaster_pg_mapping = {
 // should be safe. If you need more connect them to power directly,
 // and trigger them via transistor
 
+// LED definitions must end with -1 as end of array marker to support
+// variable amounts of LED pins depending on model
 // the power LEDs also serve as back lights
-#define POWER_LED 13
-#define POWER_LEDS {2,13}
+#define POWER_LEDS {2,13,-1}
 #if RC_MODEL == NOTANK
-// TODO, this works right now because we're not using LEDs at all - but once we start
-// using them the LED setter needs to be fixed to deal with variable length arrays
-#define FRONT_LEDS {}
-#define EFFECT_LEDS {}
+#define FRONT_LEDS {-1}
+#define EFFECT_LEDS {-1}
 #else
-#define FRONT_LEDS {11,12}
-#define EFFECT_LEDS {4,5}
+#define FRONT_LEDS {11,12,-1}
+#define EFFECT_LEDS {4,5,-1}
 #endif
 
 /*
@@ -283,29 +282,40 @@ void setup_controls(){
 }
 
 void set_led(int leds[], int cycle, int effect){
-  switch(effect){
-    case led_on:
-      digitalWrite(leds[0], HIGH);
-      digitalWrite(leds[1], HIGH);
-      break;
-    case led_off:
-      digitalWrite(leds[0], LOW);
-      digitalWrite(leds[1], LOW);
-      break;
-    case led_cycle:
-      if (cycle < 0){
-        digitalWrite(leds[0], LOW);
-        digitalWrite(leds[1], LOW);
-      } else {
-        digitalWrite(leds[0], HIGH);
-        digitalWrite(leds[1], HIGH);
-      }
-      break;
+  int i=0;
+  while (leds[i] != -1){
+    i++;
+    switch(effect){
+      case led_on:
+        digitalWrite(leds[i], HIGH);
+        break;
+      case led_off:
+        digitalWrite(leds[i], LOW);
+        break;
+      case led_cycle:
+        if (cycle < 0){
+          digitalWrite(leds[i], LOW);
+        } else {
+          digitalWrite(leds[i], HIGH);
+        }
+        break;
+    }
+  }
+}
+
+void setup_led(int leds[]){
+  int i=0;
+  while (leds[i] != -1){
+    i++;
+    pinMode(leds[i], OUTPUT);
   }
 }
 
 void setup() {
-  pinMode(POWER_LED, OUTPUT);
+  setup_led(power_leds);
+  setup_led(effect_leds);
+  setup_led(front_leds);
+
   pinMode(POWER_PIN, OUTPUT);
   digitalWrite(POWER_PIN, LOW);
   delay(500);
