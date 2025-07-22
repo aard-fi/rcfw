@@ -28,10 +28,10 @@ const channel_mapping default_mapping = {
 };
 
 const channel_mapping flysky_st_mapping = {
-  .control_channel = 7,
-  .ignition_channel = 6,
-  .effect_channel = 5,
-  .speed_channel = 4
+  .control_channel = 8,
+  .ignition_channel = 7,
+  .effect_channel = 6,
+  .speed_channel = 5
 };
 
 const channel_mapping radiomaster_st_mapping = {
@@ -86,9 +86,6 @@ const channel_mapping radiomaster_pg_mapping = {
 /*
  The further you go down the defines the less likely you should
  want to change something.
-
- For IBUS channel numbers are C indexes, i.e., one less than your transmitter
- shows you. For CRSF the channel numbers match the numbers on the transmitter.
 
  PWM motor ranges are based on the servo library, ranging from 0 to 180 - not
  the native 0-255 of Arduino PWM (which is a wrong frequency)..
@@ -240,7 +237,7 @@ void setup_controls(){
   int controls;
   if (tx_mapping.control_channel >= 1){
 #if SERIAL_PROTOCOL == TX_IBUS
-    controls = IBus.readChannel(tx_mapping.control_channel);
+    controls = IBus.readChannel(tx_mapping.control_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
     controls = crsf.getChannel(tx_mapping.control_channel);
   } else
@@ -250,58 +247,38 @@ void setup_controls(){
   if (controls <= RX_MIN)
     controls = RX_MIN;
 
-#if SERIAL_PROTOCOL == TX_IBUS
+  /*
+     For IBUS channel numbers are C indexes, i.e., one less than your transmitter
+     shows you. For CRSF the channel numbers match the numbers on the transmitter.
+
+     We adjust the numbers when reading from ibus channels, so we can use the actual
+     channel numbers here - and avoid having duplicate defines for IBUS/CRSF
+  */
 #if RC_MODEL == NOTANK
   // throttle is only supported right due to support for reversing
   if (controls == RX_MID){
     // throttle right, steering left
-    throttle_channel=1;
-    steering_channel=3;
-    failsafe_channel=0;
+    throttle_channel=2;
+    steering_channel=4;
   } else {
     // throttle and steering right
-    throttle_channel=1;
-    steering_channel=0;
-    failsafe_channel=3;
+    steering_channel=1;
+    throttle_channel=2;
   }
 #else
   if (controls == RX_MID){
     // throttle right, steering left
-    throttle_channel=1;
-    steering_channel=3;
+    throttle_channel=2;
+    steering_channel=4;
   } else if (controls == RX_MAX) {
-    // throttle and steering right
-    throttle_channel=1;
-    steering_channel=0;
-  } else {
-    // default, throttle on the left, steering right
-    throttle_channel=2;
-    steering_channel=0;
-  }
-#endif
-#else
-#if RC_MODEL == NOTANK
-  // throttle is only supported right due to support for reversing
-  if (controls == RX_MID){
-    // throttle right, steering left
-    throttle_channel=2;
-    steering_channel=4;
+    // throttle left, steering right
+    steering_channel=1;
+    throttle_thannel=3;
   } else {
     // throttle and steering right
     steering_channel=1;
     throttle_channel=2;
   }
-#else
-  if (controls == RX_MID){
-    // throttle right, steering left
-    throttle_channel=2;
-    steering_channel=4;
-  } else {
-    // throttle and steering right
-    steering_channel=1;
-    throttle_channel=2;
-  }
-#endif
 #endif
 }
 
@@ -581,7 +558,7 @@ void loop() {
 
   if (tx_mapping.ignition_channel >= 1){
 #if SERIAL_PROTOCOL == TX_IBUS
-    ignition = IBus.readChannel(tx_mapping.ignition_channel);
+    ignition = IBus.readChannel(tx_mapping.ignition_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
     if (crsf.isLinkUp() == true)
       ignition = crsf.getChannel(tx_mapping.ignition_channel);
@@ -605,7 +582,7 @@ void loop() {
     int steer;
 
 #if SERIAL_PROTOCOL == TX_IBUS
-    steer = IBus.readChannel(steering_channel);
+    steer = IBus.readChannel(steering_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
     steer = crsf.getChannel(steering_channel);
 #endif
@@ -625,7 +602,7 @@ void loop() {
     set_led(power_leds, led_state, led_on);
     int throttle;
 #if SERIAL_PROTOCOL == TX_IBUS
-    throttle = IBus.readChannel(throttle_channel);
+    throttle = IBus.readChannel(throttle_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
     throttle = crsf.getChannel(throttle_channel);
 #endif
@@ -641,9 +618,9 @@ void loop() {
     //       also might be dropped completely - motor seems to be correctly
     //       sized here, so might not be needed at all.
     int throttle_max_raw = 1500;
-    if (tx_mapping.speed_channel >= 0){
+    if (tx_mapping.speed_channel >= 1){
 #if SERIAL_PROTOCOL == TX_IBUS
-      throttle_max_raw = IBus.readChannel(tx_mapping.speed_channel);
+      throttle_max_raw = IBus.readChannel(tx_mapping.speed_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
       throttle_max_raw = crsf.getChannel(tx_mapping.speed_channel);
 #endif
@@ -668,7 +645,7 @@ void loop() {
   }
 
 #if SERIAL_PROTOCOL == TX_IBUS
-  int failsafe = IBus.readChannel(failsafe_channel);
+  int failsafe = IBus.readChannel(failsafe_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
   int failsafe = crsf.getChannel(failsafe_channel);
 #endif
