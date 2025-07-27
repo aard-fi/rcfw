@@ -106,11 +106,6 @@ const channel_mapping radiomaster_pg_mapping = {
 #define SERVO_PIN 10
 #endif
 
-// arduino can tolerate about 20µA per pin, with a total of 200µA
-// a bright 5mm LED draws roughly 20µA - so three sets of two LEDs
-// should be safe. If you need more connect them to power directly,
-// and trigger them via transistor
-
 // LED definitions must end with -1 as end of array marker to support
 // variable amounts of LED pins depending on model
 // the power LEDs also serve as back lights
@@ -137,7 +132,8 @@ expands to the whole range.
 // power cycling it when the Arduino restarts. With ELRS receivers and binding
 // phrases this allows easy switching of controllers during play without having
 // to touch the model
-#define POWER_PIN A7
+#define POWER_PIN_RCV A7
+#define POWER_PIN A6
 
 // time LED should remain in a specific status. This is per loop - so
 // take LOOP_DELAY into account as well.
@@ -301,6 +297,13 @@ void set_led(int leds[], int cycle, int effect){
   }
 }
 
+void wdt_reset_delay(int d){
+  for (int i=1; i<=d; i+=10){
+    wdt_reset();
+    delay(10);
+  }
+}
+
 void setup_led(int leds[]){
   int i=0;
   while (leds[i] != -1){
@@ -310,9 +313,23 @@ void setup_led(int leds[]){
 }
 
 void setup() {
+  wdt_disable();
   setup_led(power_leds);
   setup_led(effect_leds);
   setup_led(front_leds);
+
+  set_led(power_leds, 0, led_on);
+  set_led(front_leds, 0, led_on);
+  set_led(effect_leds, 0, led_on);
+  delay(500);
+  set_led(power_leds, 0, led_off);
+  set_led(front_leds, 0, led_off);
+  set_led(effect_leds, 0, led_off);
+
+  pinMode(POWER_PIN_RCV, OUTPUT);
+  digitalWrite(POWER_PIN_RCV, LOW);
+  delay(500);
+  digitalWrite(POWER_PIN_RCV, HIGH);
 
   pinMode(POWER_PIN, OUTPUT);
   digitalWrite(POWER_PIN, LOW);
@@ -380,21 +397,34 @@ void setup() {
 #endif
 
   wdt_enable(WDTO_2S);
+  wdt_reset();
 
 #if SERIAL_PROTOCOL == TX_CRSF
   crsf.update();
+
   int ch4 = crsf.getChannel(4);
   int loop = 0;
   while(ch4 <= RX_MIN - RX_TOLERANCE - 1){
+    set_led(power_leds, 0, led_on);
     debug_print(ch4);
     debug_print(" waiting for CRSF transmitter...");
     debug_println(loop);
     loop++;
-    delay(500);
+    wdt_reset_delay(100);
     crsf.update();
     ch4 = crsf.getChannel(4);
-    if (loop <= 60)
-      wdt_reset();
+    if (loop <= 60){
+      set_led(power_leds, 0, led_off);
+      wdt_reset_delay(400);
+    } else {
+      debug_println("Timout waiting for CRSF transmitter.");
+      while(true){
+        set_led(power_leds, 0, led_off);
+        delay(20);
+        set_led(power_leds, 0, led_on);
+        delay(20);
+      }
+    }
   }
 
 #if TX_TYPE == RADIOMASTER
