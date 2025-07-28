@@ -111,7 +111,8 @@ const channel_mapping radiomaster_pg_mapping = {
 // the power LEDs also serve as back lights
 #define POWER_LEDS {2,13,-1}
 #if RC_MODEL == NOTANK
-#define FRONT_LEDS {-1}
+#define POWER_LEDS {13,-1}
+#define FRONT_LEDS {11,-1}
 #define EFFECT_LEDS {-1}
 #else
 #define FRONT_LEDS {11,12,-1}
@@ -278,7 +279,6 @@ void setup_controls(){
 void set_led(int leds[], int cycle, int effect){
   int i=0;
   while (leds[i] != -1){
-    i++;
     switch(effect){
       case led_on:
         digitalWrite(leds[i], HIGH);
@@ -294,6 +294,7 @@ void set_led(int leds[], int cycle, int effect){
         }
         break;
     }
+    i++;
   }
 }
 
@@ -307,8 +308,8 @@ void wdt_reset_delay(int d){
 void setup_led(int leds[]){
   int i=0;
   while (leds[i] != -1){
-    i++;
     pinMode(leds[i], OUTPUT);
+    i++;
   }
 }
 
@@ -321,10 +322,6 @@ void setup() {
   set_led(power_leds, 0, led_on);
   set_led(front_leds, 0, led_on);
   set_led(effect_leds, 0, led_on);
-  delay(500);
-  set_led(power_leds, 0, led_off);
-  set_led(front_leds, 0, led_off);
-  set_led(effect_leds, 0, led_off);
 
   pinMode(POWER_PIN_RCV, OUTPUT);
   digitalWrite(POWER_PIN_RCV, LOW);
@@ -395,6 +392,13 @@ void setup() {
   delay(1);
   steering.write(STEER_MID);
 #endif
+
+  // add some delay in case something still needs to settle, and then
+  // switch lights off to show we're done with the first init phase
+  delay(1000);
+  set_led(power_leds, 0, led_off);
+  set_led(front_leds, 0, led_off);
+  set_led(effect_leds, 0, led_off);
 
   wdt_enable(WDTO_2S);
   wdt_reset();
@@ -630,6 +634,8 @@ void loop() {
   debug_print("): ");
   debug_print(ignition);
   debug_print(" ");
+
+  set_led(front_leds, led_state, led_on);
 
   if (ignition != RX_MAX){
 #if RC_MODEL == NOTANK
