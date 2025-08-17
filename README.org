@@ -17,10 +17,12 @@
     - [[#flysky-transmitter][Flysky transmitter]]
     - [[#6-channel-receivers][6 channel receivers]]
   - [[#wiring][Wiring]]
-    - [[#arctic-tinyrider][Arctic Tinyrider]]
-    - [[#notanks-2][NoTanks]]
-    - [[#rc-benchy][RC Benchy]]
-    - [[#led-setup][LED setup]]
+    - [[#led-groups][LED groups]]
+    - [[#elrs-receiver-reset][ELRS receiver reset]]
+    - [[#models][Models]]
+      - [[#arctic-tinyrider][Arctic Tinyrider]]
+      - [[#notanks-2][NoTanks]]
+      - [[#rc-benchy][RC Benchy]]
   - [[#transmitter-channels][Transmitter channels]]
     - [[#default-channel-mapping-for-radiomaster-mt12][Default channel mapping for Radiomaster MT12]]
     - [[#default-channel-mapping-for-radiomaster-pocket][Default channel mapping for Radiomaster Pocket]]
@@ -53,8 +55,17 @@ The initial version was written for IBUS receivers - some of the advanced featur
 - reversing, when supported by the model
 - control remapping: a three state switch can be used to change controls. Exact functionality depends on model and transmitter used.
 - dynamic speed control: a dial can be used to limit the speed without having to change the throttle curve in the transmitter. In the default setting the transmitter starts with 50% output, and can be set up to 100%. Exact functionality depends on model and transmitter used.
+- failsafe requires the ability of the receiver to send sane values when connectivity has been lost. This works well with ELRS receivers, untested with Flysky, though it may be possible with some.
+- three groups of LEDs can be used for models in the standard configuration: back/power, front and effect. Any of those LED groups can be set to an arbitrary number of pins from 0 to as many pins are available
 
 Ignition switching, control remapping and dynamic speed control currently can be disabled at compile time to free up channels.
+
+Flysky support will mostly be maintained at the current level, while new features target CRSF. Some rely on ELRS/CRSF behaviour, while others could be enabled somewhat easily for flysky as well. CRSF only features are:
+
+- link detection on startup. The main program will only start running once link has been established
+- receiver power cycling. With additional wiring (see below) the receiver can be power cycled on startup. This is recommended, as ELRS receivers go into WiFi configuration mode after some time, and would need manual intervention
+- link monitoring with board reset after timeout, configurable at compile time
+- remote type detection. With the controls for channel 4 in default position the type of remote (stick or pistol grip) can be auto-detected. This is a compile time setting, which defaults to on.
 
 **** NoTankS
 - turning based on accelerating or decelerating one side, depending on the current speed. This also allows turning at zero speed
@@ -72,8 +83,8 @@ Configure the correct board (Nano or Nano Every are supported, Every recommended
 
 *** Planned features
 **** General
-- support some more LEDs
-- support failsafe modes in transmitters which have that
+- steering curve adjustment for controllers with two potis
+- toggling ESC power supply/board power supply
 
 **** NoTankS
 - optimising the steering to result in as little speed change as possible
@@ -148,7 +159,34 @@ The following sections contain tables with the pinouts, with the table colums or
 
 IBUS receivers have three pin connectors, and only connect to RX. CRSF receivers have four pin connectors, and also connect to TX. The pinouts are for the Arduino Nano Every - on the Nano use RX/TX instead. Note that flashing on the Nano uses RX/TX, so for that board RX should be disconnected on during flashing.
 
-*** Arctic Tinyrider
+*** LED groups
+
+The Arduino can tolerate about 20mA per pin, with a total of 200mA. One bright 5mm LED draws roughly 20mA - so three sets of two LEDs should be safe to connect directly. For ad-hoc cabling it is sensible to provide a ground pin to connect to a separate ground bar for additional LEDs. When switching LEDs via a transistor it also makes sense to create a power bar.
+
+With insufficient pins, or more/brighter LEDs they should be wired via a transistor. For a small NPN transistor like the 2N3904 you'd connect the base to the Arduino pin through a 4.7kΩ resistor, emitter to GND, and the LED between VCC and the collector.
+
+The default LED pins are in this table:
+
+|             | Pin 1 | Pin 2 |
+|-------------+-------+-------|
+| status/back | D13   | D2    |
+| front       | D11   | D12   |
+| effect      | D4    | D5    |
+
+Pin 2 is only relevant when attaching two power hungry LEDs directly for one specific effect, and may have to be explicitly enabled for a specific model.
+
+If a model doesn't incorporate LEDs one status LED should still be visible for safety reasons. This can either be achieved by mounting the Arduino in a way that the on board LED connected to pin 13 becomes visible, or by connecting an extra LED to pin 13.
+
+When incorporating LEDs into a model the status LEDs should be used as the rear lights.
+
+*** ELRS receiver reset
+
+Pin A7 is configured as digital pin, and pulled high on startup. This allows powering the receiver only when the program is running, and power cycling it as needed.
+
+To use this you'll need a NPN transistor like the BD139. Connect the base to A7 through a 1kΩ resistor, emitter to GND, collector to GND of the receiver, and  of the power in of the receiver to VCC.
+
+*** Models
+**** Arctic Tinyrider
 
 |          | GND | 5v | arduino | arduino |
 |----------+-----+----+---------+---------|
@@ -158,7 +196,7 @@ IBUS receivers have three pin connectors, and only connect to RX. CRSF receivers
 | servo    | x   | x  | D10     |         |
 
 
-*** NoTanks
+**** NoTanks
 
 |           | GND | 5v | arduino | arduino |
 |-----------+-----+----+---------+---------|
@@ -167,7 +205,7 @@ IBUS receivers have three pin connectors, and only connect to RX. CRSF receivers
 | receiver  | x   | x  | RX1     | TX1     |
 | arduino   | x   | x  |         |         |
 
-*** RC Benchy
+**** RC Benchy
 
 |          | GND | 5v | arduino | arduino |
 |----------+-----+----+---------+---------|
@@ -175,20 +213,6 @@ IBUS receivers have three pin connectors, and only connect to RX. CRSF receivers
 | receiver | x   | x  | RX1     | TX1     |
 | arduino  | x   | x  |         |         |
 | servo    | x   | x  | D10     |         |
-
-*** LED setup
-
-LEDs are currently not properly supported, apart from the power/status LED - this section describes the hardware configuration that will be supported eventually.
-
-For ad-hoc cabling it is sensible to provide a ground pin to connect to a separate ground bar for additional LEDs. When using LEDs drawing more than 20µA or more than two for one effect they'll have to be switched via transistor and powered via the ESC, in which case it also makes sense to lead out a power bar.
-
-When adding LEDs the default pins are in this table. D13 is also the LED mounted on the Arduino, so if this one is visible no external LEDs are needed. If it is not visible at least one status-LED should be connected for safety - this LED signals throttle lock or error conditions. In a full LED setup the status LEDs should be used as rear lights.
-
-|        | Pin 1 | Pin 2 |
-|--------+-------+-------|
-| status | D13   | D2    |
-| front  | D11   | D12   |
-| effect | D4    | D5    |
 
 ** Transmitter channels
 This section contains tables about channel setups for all tested transmitters, with information on how to set up additional switches, if needed.
