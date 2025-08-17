@@ -71,9 +71,15 @@ const channel_mapping radiomaster_pg_mapping = {
 #endif
 
 // this must match the configured speed in the receiver
-// if the connection does not work double check that the receiver
-// is configured correctly
+// if the connection does not work double check that the receiver is configured
+// correctly. This is particularly important on the original Nano, which can
+// only reliably sustain serial speeds of up to 115200 - for other boards our
+// default should match the receiver default.
+#ifdef ARDUINO_AVR_NANO
+#define CRSF_SPEED 115200
+#else
 #define CRSF_SPEED 420000
+#endif
 
 // set this for logging complete channel status table (CRSF only)
 //#define DEBUG_CHANNELS 1
@@ -355,7 +361,7 @@ void setup() {
 #if SERIAL_PROTOCOL == TX_IBUS
   IBus.begin(Serial,IBUSBM_NOTIMER);
 #elif SERIAL_PROTOCOL == TX_CRSF
-  Serial.begin(115200);
+  Serial.begin(CRSF_SPEED);
   crsf.begin(Serial);
 #endif
   #warning Building for Nano disables debug output

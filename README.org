@@ -36,7 +36,13 @@ This is a variant of my [[https://github.com/bwachter/arctic_tinyrider][Arctic T
 
 It should also work without changes for any model either just using two motors, ore one motor and one servo for steering - the upcoming model specific details are mostly about LED effects.
 
-For this variant I've moved to the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] - mainly for the additional UARTs. This is mainly useful for debugging - the RX pin is no longer shared between the iBus receiver and USB serial. This will also compile on a Nano, but in that case will disable debug logging.
+For this variant I've moved to the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] - mainly for the additional UARTs. This is mainly useful for debugging - the RX pin is no longer shared between the iBus receiver and USB serial. The original Nano is still supported, though, and incompatible features (mostly debug logging) get automatically disabled during compilation.
+
+The Every uses the first UART via USB serial, and the second UART via the RX/TX pins (which are used for connecting to the receiver). The older Nano connects its first (and only) UART to both USB serial and the RX/TX pins - so it should be programmed with the rest of the circuit powered down.
+
+This is mostly annoying when actively developing - so for models which only occasionally get updated firmware without active development a generic Nano clone should be sufficient, and way cheaper. At the time of writing a Nano clone (which even has USB C) costs less than 1 EUR, while the original Every goes up to 20 EUR, with clones (which also stick to Micro USB for some reason) selling for roughly 12 EUR.
+
+The only other disadvantage of the original Nano for basic models is the lower serial port speed of 115200 - but that should not be an issue for the type of model this firmware tries to support.
 
 *** Working features
 The initial version was written for IBUS receivers - some of the advanced features may not work with CRSF receivers yet.
