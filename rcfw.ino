@@ -273,7 +273,7 @@ void setup_controls(){
   } else if (controls == RX_MAX) {
     // throttle left, steering right
     steering_channel=1;
-    throttle_thannel=3;
+    throttle_channel=3;
   } else {
     // throttle and steering right
     steering_channel=1;
