@@ -16,7 +16,8 @@
     - [[#elrs-transmitter][ELRS transmitter]]
     - [[#flysky-transmitter][Flysky transmitter]]
     - [[#6-channel-receivers][6 channel receivers]]
-  - [[#wiring][Wiring]]
+  - [[#arduino-shield][Arduino shield]]
+  - [[#manual-wiring][Manual wiring]]
     - [[#led-groups][LED groups]]
     - [[#elrs-receiver-reset][ELRS receiver reset]]
     - [[#models][Models]]
@@ -42,7 +43,7 @@ For this variant I've moved to the [[https://store.arduino.cc/products/arduino-n
 
 The Every uses the first UART via USB serial, and the second UART via the RX/TX pins (which are used for connecting to the receiver). The older Nano connects its first (and only) UART to both USB serial and the RX/TX pins - so it should be programmed with the rest of the circuit powered down.
 
-This is mostly annoying when actively developing - so for models which only occasionally get updated firmware without active development a generic Nano clone should be sufficient, and way cheaper. At the time of writing a Nano clone (which even has USB C) costs less than 1 EUR, while the original Every goes up to 20 EUR, with clones (which also stick to Micro USB for some reason) selling for roughly 12 EUR.
+This is mostly annoying when actively developing - so for models which only occasionally get updated firmware without active development a generic Nano clone should be sufficient, and way cheaper. At the time of writing a Nano clone (which even has USB C) costs less than 1 EUR, while the original Every goes up to 20 EUR, with clones (which also stick to Micro USB for some reason) selling for roughly 12 EUR. Schematics and PCB layout for a shield offering all connections used by this project are in ./arduino-nano-shield/ - and can be [[https://www.pcbway.com/project/shareproject/rcfw_Arduino_Nano_shield_ea388a65.html][ordered via PCBWay]]. See below for build instructions.
 
 The only other disadvantage of the original Nano for basic models is the lower serial port speed of 115200 - but that should not be an issue for the type of model this firmware tries to support.
 
@@ -145,7 +146,25 @@ The ignition switch is expected on channel 7.
 
 VRB is currently not used, so to make this work you need to select three features to drop to free up channels, and disable them at compile time. With ELRS receivers supporting at least 16 channels, and all the cheap AFHDS nano receivers supporting 10 support for running building with less than 10 channels may be dropped eventually.
 
-** Wiring
+** Arduino shield
+
+The included Arduino shield simplifies the wiring a lot - see the next section if you prefer manual wiring.
+
+If you want the receiver controllable via the Arduino solder a 1kΩ resistor into =R1=, and a  =BD139= or compatible transistor into =Q1=. If you don't need that just bridge pins 1 and 2 of =Q1=.
+
+If you want LEDs solder =2N3904= or compatible transistors into =Q2= and =Q3=, and 4.7kΩ resistors into =R2= and =R3=. If your LEDs are 5V tolerant you can just bridge =R2/R3= instead. Solder pin headers into =J4= and =J5= - each can support two connections.
+
+To prevent the Arduino powering the ESC and motors when only plugged in via USB solder a diode into =D1=. This can be bridged in case you'd rather just be careful, and buy more Arduinos when you mess up.
+
+For the ELRS connector, solder a 4 pin header into =J1=.
+
+For one ESC, solder one 3 pin header into =J2=. This will power the circuit when on battery. For a second ESC, also solder one 3 pin header into =J3=. The power connector from this leads to =J6= - if you want to power extra devices not controlled from the Arduino solder a 6 pin header into that one.
+
+For the servo solder a 3 pin header into =D10=. In case you need two servos, but only one ESC also populate J3, and add a wire bridge from the middle pin of =J3= to the middle pin of =J2= - this will connect the otherwise isolated power pin of =J2/J6=.
+
+To make I²C accessible solder a 3 pin header into =J7=.
+
+** Manual wiring
 
 You'll need one power and one ground bar to connect everything to. A quick and dirty variant is getting ready made jumper wires, cut them and then twist end solder the ends together. On the Arduino connect ground and VIN to ground/power bars via a diode to make sure components can't draw power through the Arduino if it is the only thing powered, like during flashing.
 

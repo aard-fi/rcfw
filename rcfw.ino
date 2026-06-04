@@ -1,3 +1,4 @@
+// See LICENSE.txt or https://creativecommons.org/licenses/by-nc-sa/4.0/
 #include <Servo.h>
 #include <avr/wdt.h>
 

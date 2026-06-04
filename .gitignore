@@ -1,0 +1,30 @@
+# kicad files and production outputs
+# --- Temporary files & Session locks ---
+*.kicad_pcb-bak
+*.kicad_prl
+*.kicad_sch-bak
+*.kicad_sym-bak
+*.fp-info-cache
+*.fp-lib-table-bak
+*.sym-lib-table-bak
+*~
+
+# --- Auto-save recovery directories ---
+_autosave-*
+_autosave_*.kicad_pcb
+
+# --- Local user-specific interface profiles & caches ---
+*.bak
+*.lck
+.kicad_wks-bak
+
+# --- ERC/DRC Report Logs ---
+*.rpt
+
+# --- Automated Manufacturing Output Folders ---
+# (Uncomment the line below if you generate Gerbers inside a folder named "gerber")
+# gerber/
+# gerbers/
+
+.history
+*.dsn
