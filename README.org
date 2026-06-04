@@ -164,6 +164,12 @@ For the servo solder a 3 pin header into =D10=. In case you need two servos, but
 
 To make I²C accessible solder a 3 pin header into =J7=.
 
+The V2 version (included here, but not yet available for order) includes some conveniences for some model:
+
+- the servo header =D10= can be populated with a 3x2 pin header, allowing to plug in two servos. This is useful for the RC benchy to move the steering wheel as well
+- a jumper was added between voltage pins of the two ESC headers =J2/J3=. This allows easy power connection for single ESC models, either by jumper or permanent bridge
+- a 4 pin header with Arduino pins =D5= and =D6= got added with a common GPS footprint, for use via software serial, though may be useful for extra pins on some other models as well
+
 ** Manual wiring
 
 You'll need one power and one ground bar to connect everything to. A quick and dirty variant is getting ready made jumper wires, cut them and then twist end solder the ends together. On the Arduino connect ground and VIN to ground/power bars via a diode to make sure components can't draw power through the Arduino if it is the only thing powered, like during flashing.
