@@ -28,3 +28,6 @@ _autosave_*.kicad_pcb
 
 .history
 *.dsn
+/arduino-nano-shield/gerbers/
+/build/
+/firmware/

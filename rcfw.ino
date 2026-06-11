@@ -6,7 +6,15 @@
 #define RC_BENCHY 2
 #define NOTANK 3
 
-// set thins to the model you're using from above list
+#define LED_MODE_DIRECT 1
+#define LED_MODE_74HC595D 2
+#define LED_MODE_ADDRESSABLE 3
+
+// set this to the LED mode you're using from above list
+// when not using any LEDs any value here is fine
+#define LED_MODE LED_MODE_74HC595D
+
+// set this to the model you're using from above list
 #ifndef RC_MODEL
 #define RC_MODEL NOTANK
 #endif
@@ -113,9 +121,27 @@ const channel_mapping radiomaster_pg_mapping = {
 #define SERVO_PIN 10
 #endif
 
+// Helpers for LED array definitions.  In direct mode only LED() is usable.
+#define LED(n)     (n)           // single-colour LED on pin or output n
+#define RGB(n)     (-(n) - 2)    // RGB on outputs n(R), n+1(G), n+2(B). n >= 0.
+#define RGBW(n)    (-(n) - 1002) // RGBW on outputs n(R), n+1(G), n+2(B), n+3(W). n >= 0.
+
 // LED definitions must end with -1 as end of array marker to support
-// variable amounts of LED pins depending on model
-// the power LEDs also serve as back lights
+// variable amounts of LED pins depending on model.
+//
+// The power LEDs also serve as rear lights.
+//
+// Encoding (see also LED(), RGB(), RGBW() macros):
+//   positive value (0, 1, 2 …)   = single-colour LED on that pin/index.
+//   negative value -2 … -999     = RGB LED.  Base index = abs(value) - 2.
+//   negative value -1002 …       = RGBW LED. Base index = abs(value) - 1002.
+//   -1                           = end of array.
+// Examples:    5  -> single LED on pin/index 5
+//             -2  -> RGB on pins/indices 0(R), 1(G), 2(B)
+//             -5  -> RGB on pins/indices 3(R), 4(G), 5(B)
+//          -1002  -> RGBW on pins/indices 0(R), 1(G), 2(B), 3(W)
+//          -1005  -> RGBW on pins/indices 3(R), 4(G), 5(B), 6(W)
+#if LED_MODE == LED_MODE_DIRECT
 #define POWER_LEDS {2,13,-1}
 #if RC_MODEL == NOTANK
 #define POWER_LEDS {13,-1}
@@ -124,6 +150,28 @@ const channel_mapping radiomaster_pg_mapping = {
 #else
 #define FRONT_LEDS {11,12,-1}
 #define EFFECT_LEDS {4,5,-1}
+#endif
+
+#elif LED_MODE == LED_MODE_74HC595D
+const int data_pin = 11; // LDSI
+const int latch_pin = 12; // LDSTR
+const int clock_pin = 13; // LDSCK
+
+// LED indices in the 24-bit shift register chain (3x 74HC595D).
+// Each logical LED group is tied to one physical chip for clean wiring:
+//   Chip 1 (outputs 0-7):   Rear / power LEDs
+//   Chip 2 (outputs 8-15):  Front LEDs
+//   Chip 3 (outputs 16-23): Effect LEDs
+//
+// Use LED() for single-colour outputs, RGB() for RGB triples, RGBW() for RGBW.
+// RGB() or RGBW() definitions still work with on/off commands, as those trigger
+// all possible outputs.
+#define POWER_LEDS  { RGB(0), -1 }   // outputs 0(R), 1(G), 2(B)  – first chip
+#define FRONT_LEDS  { RGB(8), -1 }   // outputs 8(R), 9(G), 10(B) – second chip
+#define EFFECT_LEDS { LED(16), -1 }  // output 16                 – third chip
+
+#elif LED_MODE == LED_MODE_ADDRESSABLE
+// placeholder for addressable LED pin/index definitions
 #endif
 
 /*
@@ -217,9 +265,13 @@ int front_leds[]=FRONT_LEDS;
 int effect_leds[]=EFFECT_LEDS;
 
 enum led_effects{
-  led_on,
-  led_off,
-  led_cycle
+  led_off   = 0x00,
+  led_r     = 0x01,  // bit 0
+  led_g     = 0x02,  // bit 1
+  led_b     = 0x04,  // bit 2
+  led_w     = 0x08,  // bit 3
+  led_on    = 0x0F,  // r | g | b | w
+  led_cycle = 0x10,  // bit 4 – OR with any colour for blink
 };
 
 channel_mapping get_tx_mapping(int type){
@@ -283,26 +335,78 @@ void setup_controls(){
 #endif
 }
 
+#if LED_MODE == LED_MODE_74HC595D
+uint32_t sr_state = 0;
+
+void shift_out_state(){
+  digitalWrite(latch_pin, LOW);
+  // For chained 74HC595Ds, shift the last chip's byte first so it propagates down the chain.
+  // The last byte shifted ends up in the first chip connected to the Arduino.
+  shiftOut(data_pin, clock_pin, MSBFIRST, (sr_state >> 16) & 0xFF);
+  shiftOut(data_pin, clock_pin, MSBFIRST, (sr_state >> 8) & 0xFF);
+  shiftOut(data_pin, clock_pin, MSBFIRST, sr_state & 0xFF);
+  digitalWrite(latch_pin, HIGH);
+}
+#endif
+
 void set_led(int leds[], int cycle, int effect){
+  bool do_cycle = effect & led_cycle;
+  uint8_t color = effect & led_on;
+
+  // backward compat: bare led_cycle without colour means cycle full on/off
+  if (do_cycle && color == 0)
+    color = led_on;
+
+  // apply cycle timing: negative cycle value = OFF phase
+  if (do_cycle && cycle < 0)
+    color = led_off;
+
   int i=0;
   while (leds[i] != -1){
-    switch(effect){
-      case led_on:
-        digitalWrite(leds[i], HIGH);
-        break;
-      case led_off:
-        digitalWrite(leds[i], LOW);
-        break;
-      case led_cycle:
-        if (cycle < 0){
-          digitalWrite(leds[i], LOW);
-        } else {
-          digitalWrite(leds[i], HIGH);
-        }
-        break;
+    int idx = leds[i];
+    bool is_rgbw = (idx <= -1000);
+    bool is_rgb  = (idx < -1) && !is_rgbw;
+    if (is_rgbw)      idx = -idx - 1002;
+    else if (is_rgb)  idx = -idx - 2;
+
+#if LED_MODE == LED_MODE_DIRECT
+    // direct mode does not support RGB or RGBW (not enough pins), so any
+    // non-zero colour falls back to simple ON.
+    digitalWrite(idx, color ? HIGH : LOW);
+
+#elif LED_MODE == LED_MODE_74HC595D
+    if (is_rgb){
+      uint32_t mask = 0;
+      if (color & led_r) mask |= (1UL << idx);
+      if (color & led_g) mask |= (1UL << (idx+1));
+      if (color & led_b) mask |= (1UL << (idx+2));
+      uint32_t clear_mask = (1UL << idx) | (1UL << (idx+1)) | (1UL << (idx+2));
+      sr_state = (sr_state & ~clear_mask) | mask;
+    } else if (is_rgbw){
+      uint32_t mask = 0;
+      if (color & led_r) mask |= (1UL << idx);
+      if (color & led_g) mask |= (1UL << (idx+1));
+      if (color & led_b) mask |= (1UL << (idx+2));
+      if (color & led_w) mask |= (1UL << (idx+3));
+      uint32_t clear_mask = (1UL << idx) | (1UL << (idx+1))
+                          | (1UL << (idx+2)) | (1UL << (idx+3));
+      sr_state = (sr_state & ~clear_mask) | mask;
+    } else {
+      uint32_t mask = 1UL << idx;
+      if (color)
+        sr_state |= mask;
+      else
+        sr_state &= ~mask;
     }
+
+#elif LED_MODE == LED_MODE_ADDRESSABLE
+    // placeholder: colour bits map directly to RGB components
+#endif
     i++;
   }
+#if LED_MODE == LED_MODE_74HC595D
+  shift_out_state();
+#endif
 }
 
 void wdt_reset_delay(int d){
@@ -313,18 +417,28 @@ void wdt_reset_delay(int d){
 }
 
 void setup_led(int leds[]){
+#if LED_MODE == LED_MODE_DIRECT
   int i=0;
   while (leds[i] != -1){
     pinMode(leds[i], OUTPUT);
     i++;
   }
+#endif
 }
 
 void setup() {
   wdt_disable();
+#if LED_MODE == LED_MODE_DIRECT
   setup_led(power_leds);
   setup_led(effect_leds);
   setup_led(front_leds);
+#elif LED_MODE == LED_MODE_74HC595D
+  pinMode(data_pin, OUTPUT);
+  pinMode(latch_pin, OUTPUT);
+  pinMode(clock_pin, OUTPUT);
+#elif LED_MODE == LED_MODE_ADDRESSABLE
+  // addressable LED setup will go here
+#endif
 
   set_led(power_leds, 0, led_on);
   set_led(front_leds, 0, led_on);
