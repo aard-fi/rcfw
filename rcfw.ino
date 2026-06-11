@@ -293,9 +293,10 @@ void setup_controls(){
     controls = IBus.readChannel(tx_mapping.control_channel-1);
 #elif SERIAL_PROTOCOL == TX_CRSF
     controls = crsf.getChannel(tx_mapping.control_channel);
-  } else
 #endif
+  } else {
     controls = RX_MIN;
+  }
 
   if (controls <= RX_MIN)
     controls = RX_MIN;
