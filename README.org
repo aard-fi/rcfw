@@ -39,13 +39,15 @@ This is a variant of my [[https://github.com/bwachter/arctic_tinyrider][Arctic T
 
 It should also work without changes for any model either just using two motors, ore one motor and one servo for steering - the upcoming model specific details are mostly about LED effects.
 
-For this variant I've moved to the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] - mainly for the additional UARTs. This is mainly useful for debugging - the RX pin is no longer shared between the iBus receiver and USB serial. The original Nano is still supported, though, and incompatible features (mostly debug logging) get automatically disabled during compilation.
+You can download pre-built firmware for all supported hardware and feature combinations from the [[https://github.com/aard-fi/rcfw/releases][releases page]] and flash them with [[https://github.com/avrdudes/avrdude][avrdude]] (=avrdude -p atmega328p|atmega4809 -c arduino|jtag2updi -P /dev/ttyS0 -b 115200=) , or follow the build instructions below.
+
+Currently supported are the [[https://store.arduino.cc/products/arduino-nano][Arduino Nano]] and the [[https://store.arduino.cc/products/arduino-nano-every][Arduino Nano Every]] as well as all their clones - especially for the Nano I'd recommend getting a cheap clone (ideally with USB-C) via ebay or aliexpress.
 
 The Every uses the first UART via USB serial, and the second UART via the RX/TX pins (which are used for connecting to the receiver). The older Nano connects its first (and only) UART to both USB serial and the RX/TX pins - so it should be programmed with the rest of the circuit powered down.
 
 This is mostly annoying when actively developing - so for models which only occasionally get updated firmware without active development a generic Nano clone should be sufficient, and way cheaper. At the time of writing a Nano clone (which even has USB C) costs less than 1 EUR, while the original Every goes up to 20 EUR, with clones (which also stick to Micro USB for some reason) selling for roughly 12 EUR. Schematics and PCB layout for a shield offering all connections used by this project are in ./arduino-nano-shield/ - and can be [[https://www.pcbway.com/project/shareproject/rcfw_Arduino_Nano_shield_ea388a65.html][ordered via PCBWay]]. See below for build instructions.
 
-The only other disadvantage of the original Nano for basic models is the lower serial port speed of 115200 - but that should not be an issue for the type of model this firmware tries to support.
+The only other disadvantage of the original Nano for basic models is the lower serial port speed of 115200 - but that should not be an issue for the type of model this firmware tries to support. For ELRS receivers you may have to set their serial speed to 115200 once when using a Nano.
 
 *** Working features
 The initial version was written for IBUS receivers - some of the advanced features may not work with CRSF receivers yet.
@@ -81,6 +83,8 @@ Get the [[https://www.arduino.cc/en/software][Arduino IDE]], and the following l
 - for IBUS use [[https://github.com/bmellink/IBusBM][IBusBM]]
 
 Configure the correct board (Nano or Nano Every are supported, Every recommended), and go through the defines at the beginning of the file to configure the build for your model and transmitter setup.
+
+Alternatively you can install [[https://docs.arduino.cc/arduino-cli/][arduino-cli]], and use the included Makefile: =make deps= once, and then =make all-variants=, or =make= with the flags you want. See the Makefile for more details.
 
 *** Planned features
 **** General
@@ -150,6 +154,9 @@ VRB is currently not used, so to make this work you need to select three feature
 
 The included Arduino shield simplifies the wiring a lot - see the next section if you prefer manual wiring.
 
+#+CAPTION: Three PCB versions, left to right V1, V2 and V2.1
+[[./files/arduino_shields.jpg]]
+
 If you want the receiver controllable via the Arduino solder a 1kΩ resistor into =R1=, and a  =BD139= or compatible transistor into =Q1=. If you don't need that just bridge pins 1 and 2 of =Q1=.
 
 If you want LEDs solder =2N3904= or compatible transistors into =Q2= and =Q3=, and 4.7kΩ resistors into =R2= and =R3=. If your LEDs are 5V tolerant you can just bridge =R2/R3= instead. Solder pin headers into =J4= and =J5= - each can support two connections.
@@ -169,6 +176,11 @@ The V2 version (included here, but not yet available for order) includes some co
 - the servo header =D10= can be populated with a 3x2 pin header, allowing to plug in two servos. This is useful for the RC benchy to move the steering wheel as well
 - a jumper was added between voltage pins of the two ESC headers =J2/J3=. This allows easy power connection for single ESC models, either by jumper or permanent bridge
 - a 4 pin header with Arduino pins =D5= and =D6= got added with a common GPS footprint, for use via software serial, though may be useful for extra pins on some other models as well
+
+The V2.1 version adds:
+
+- a three pin header behind the LED resistors over =D11/D12/D13= to allow easy connection of a =74HC595D= module for adding more LEDs
+- pin headers on =A20= and =A21= and for future expansions
 
 ** Manual wiring
 
