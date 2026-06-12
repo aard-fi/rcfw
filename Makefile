@@ -34,7 +34,7 @@ ifeq ($(BOARD),nano)
   MCU          = atmega328p
   AVRDUDE_PROG = arduino
 else ifeq ($(BOARD),nano-every)
-  FQBN         = arduino:megaavr:nano
+  FQBN         = arduino:megaavr:nona4809
   MCU          = atmega4809
   AVRDUDE_PROG = jtag2updi
   BAUD         = 115200
@@ -55,11 +55,11 @@ EXTRA_FLAGS  = -DRC_MODEL=$(RC_MODEL) -DLED_MODE=$(LED_MODE) -DTX_TYPE=$(TX_TYPE
 # ---------------------------------------------------------------------------
 # Targets
 # ---------------------------------------------------------------------------
-.PHONY: all build flash upload clean monitor deps verify all-variants
+.PHONY: all build flash upload clean monitor deps verify-build verify-flash all-variants
 
 all: build
 
-build: verify
+build: verify-build
 	@echo "==> Building $(VARIANT)"
 	@mkdir -p $(FIRMWARE_DIR)
 	arduino-cli compile --fqbn $(FQBN) \
@@ -69,7 +69,7 @@ build: verify
 	@cp $(HEX_SRC) $(HEX_OUT)
 	@echo "==> $(HEX_OUT)"
 
-flash: build
+flash: verify-flash build
 	@if [ -z "$(PORT)" ]; then \
 	  echo "PORT not set. Example: make PORT=/dev/ttyUSB0 flash"; exit 1; fi
 	@echo "==> Flashing $(MCU) on $(PORT) via $(AVRDUDE_PROG) at $(BAUD) baud"
@@ -86,8 +86,10 @@ monitor:
 	@which minicom >/dev/null 2>&1 && minicom -D $(PORT) -b 115200 || \
 	  screen $(PORT) 115200
 
-verify:
+verify-build:
 	@which arduino-cli >/dev/null || (echo "arduino-cli not found. https://arduino.github.io/arduino-cli/installation/"; exit 1)
+
+verify-flash:
 	@which avrdude   >/dev/null || (echo "avrdude not found. Install via your package manager."; exit 1)
 
 # Install Arduino cores and libraries.  Run once after cloning.
@@ -108,15 +110,18 @@ deps:
 ALL_MODELS = SNOW_MOBILE RC_BENCHY NOTANK
 ALL_MODES  = LED_MODE_DIRECT LED_MODE_74HC595D
 ALL_TX     = FLYSKY_ST RADIOMASTER
+ALL_BOARDS = nano nano-every
 
 all-variants:
 	@mkdir -p $(FIRMWARE_DIR)
-	@for model in $(ALL_MODELS); do \
-	  for mode in $(ALL_MODES); do \
-	    for tx in $(ALL_TX); do \
-	      echo ""; \
-	      echo ">>> $$model / $$mode / $$tx / $(BOARD)"; \
-	      $(MAKE) RC_MODEL=$$model LED_MODE=$$mode TX_TYPE=$$tx BOARD=$(BOARD) build || exit 1; \
+	@for board in $(ALL_BOARDS); do \
+	  for model in $(ALL_MODELS); do \
+	    for mode in $(ALL_MODES); do \
+	      for tx in $(ALL_TX); do \
+	        echo ""; \
+	        echo ">>> $$model / $$mode / $$tx / $$board"; \
+	        $(MAKE) RC_MODEL=$$model LED_MODE=$$mode TX_TYPE=$$tx BOARD=$$board build || exit 1; \
+	      done; \
 	    done; \
 	  done; \
 	done
